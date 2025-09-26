@@ -89,19 +89,19 @@ int main(int argc, char *arvg[])
     if (!in)
         exit(-1);
 
-    fscanf(in, "N: %u\n", &N);
-    fscanf(in, "K: %u\n", &K);
+    fscanf(in, "N: %zu\n", &N);
+    fscanf(in, "K: %zu\n", &K);
     fscanf(in, "Ps: %f\n", &Ps);
     N = CLAMP(N, 0, 16);
     K = CLAMP(K, 10, 1000);
     Ps = CLAMP(Ps, 0.01, 0.99);
-    printf("N: %u, K: %u, Ps: %.2f\n", N, K, Ps);
+    printf("N: %zu, K: %zu, Ps: %.2f\n", N, K, Ps);
     int i = 0;
     for (i = 0; i < N && !feof(in); i++) {
-        int got = fscanf(in, "%f %f %f %u\n", &path[i].b, &path[i].l, &path[i].p, &path[i].q);
+        int got = fscanf(in, "%f %f %f %zu\n", &path[i].b, &path[i].l, &path[i].p, &path[i].q);
         if (got != 4)
             break;
-        printf("path[%d] %f %f %f %u\n", i, path[i].b, path[i].l, path[i].p, path[i].q);
+        printf("path[%d] %f %f %f %zu\n", i, path[i].b, path[i].l, path[i].p, path[i].q);
     }
     fclose(in);
     if (i != N)
@@ -110,7 +110,7 @@ int main(int argc, char *arvg[])
     float total_time = optimizer(N, K, path);
     printf("estimated transfer time: %.2fs\n", total_time);
     for (i = 0; i < N; i++) {
-        printf("m[%2d]: %4d with %4.1f%% loss -> %4d\n", i, path[i].m, 100.0 * (path[i].p), (size_t)psi(Ps, path[i].m, path[i].p));
+        printf("m[%2d]: %4zu with %4.1f%% loss -> %4zu\n", i, path[i].m, 100.0 * (path[i].p), (size_t)psi(Ps*100, path[i].m, path[i].p));
     }
 
     return 0;
