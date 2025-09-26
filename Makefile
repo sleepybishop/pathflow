@@ -1,5 +1,5 @@
 CFLAGS = -std=c99 -Iamoeba -O0 -g -D_DEFAULT_SOURCE
-LDFLAGS = -lm 
+LDLIBS = -lm 
 
 all: pathflow 
 
