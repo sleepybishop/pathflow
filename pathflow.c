@@ -47,36 +47,36 @@ float optimizer(size_t N, size_t Kval, path_t *path)
     int ret = 0;
     float Zval = 0.0;
     am_Solver *solver;
-    am_Variable *m[N], *Z;
+    am_Num m[N], Z;
+    am_Id vm[N], vZ;
     am_Constraint *c[N], *K;
 
     solver = am_newsolver(NULL, NULL);
     if (solver == NULL)
         return -1;
-    Z = am_newvariable(solver);
+    vZ = am_newvariable(solver, &Z);
     K = am_newconstraint(solver, AM_REQUIRED);
     am_addconstant(K, Kval);
     am_setrelation(K, AM_EQUAL);
 
     for (int i = 0; i < N; i++) {
-        m[i] = am_newvariable(solver);
+        vm[i] = am_newvariable(solver, &m[i]);
         c[i] = am_newconstraint(solver, AM_REQUIRED);
-        am_addterm(c[i], Z, 1.0);
+        am_addterm(c[i], vZ, 1.0);
         am_setrelation(c[i], AM_GREATEQUAL);
-        am_addterm(c[i], m[i], 1.0 / path[i].b);
+        am_addterm(c[i], vm[i], 1.0 / path[i].b);
         am_addconstant(c[i], path[i].l + path[i].q / path[i].b);
         am_add(c[i]);
-        am_addterm(K, m[i], 1.0);
+        am_addterm(K, vm[i], 1.0);
     }
     am_add(K);
 
     am_updatevars(solver);
     for (int i = 0; i < N; i++) {
-        path[i].m = (size_t)ceil(am_value(m[i]));
+        path[i].m = (size_t)ceil(m[i]);
     }
-    Zval = am_value(Z);
     am_delsolver(solver);
-    return Zval;
+    return Z;
 }
 
 int main(int argc, char *arvg[])
