@@ -71,7 +71,7 @@ float optimizer(size_t N, size_t K, path_t *path, float deadline, size_t Ps)
 
     de_optimiser *solver = de_init(&(de_settings){
         .dimension_count = N,
-        .population_count = 10.0 * N,
+        .population_count = 20.0 * N,
         .lower_bound = 0.0f,
         .upper_bound = deadline,
         .random_seed = 0x5eed,
