@@ -87,17 +87,23 @@ float optimizer(size_t N, size_t K, path_t *path, float deadline)
         return -1;
 
     float Z = FLT_MAX;
-    for (size_t i = 0; i < 500000; i++) {
+    float epsilon = 1e-6;
+    size_t iters = 1000000, unchanged = 0;
+    for (size_t i = 0; i < iters; i++) {
         int id = de_ask(solver, candidate);
         float fitness = transfer_time(N, K, candidate, path);
-        de_tell(solver, id, candidate, fitness);
 
-        if (i % 10000 == 0) {
-            Z = de_best(solver, NULL);
-            //printf("Step [%08zu] fitness: %10.10e\n", i, Z);
+        Z = de_best(solver, NULL);
+        if (fitness + epsilon < Z) {
+            unchanged = 0;
+            // printf("step [%08zu] fitness: %16.6f\n", i, Z);
+        } else {
+            unchanged++;
+            if (unchanged == iters / 10)
+                break;
         }
+        de_tell(solver, id, candidate, fitness);
     }
-    Z = de_best(solver, candidate);
     for (int i = 0; i < N; i++) {
         path[i].m = (size_t)round(candidate[i]);
     }
@@ -138,7 +144,8 @@ int main(int argc, char *arvg[])
     float total_time = optimizer(N, K, path, 60.0);
     printf("estimated transfer time: %.2fs\n", total_time);
     for (i = 0; i < N; i++) {
-        printf("m[%2d]: %4zu with %4.1f%% loss -> %4zu\n", i, path[i].m, 100.0 * (path[i].p), (size_t)psi(Ps*100, path[i].m, path[i].p));
+        printf("m[%2d]: %4zu with %4.1f%% loss -> %4zu\n", i, path[i].m, 100.0 * (path[i].p),
+               (size_t)psi(Ps * 100, path[i].m, path[i].p));
     }
 
     return 0;
