@@ -49,11 +49,10 @@ float path_time(size_t m, path_t *path)
     return m / path->b + path->l + path->q / path->b;
 };
 
-float transfer_time(size_t N, size_t K, float *m, path_t *path)
+float transfer_time(size_t N, size_t K, float penalty, float *m, path_t *path)
 {
     float ret = 0.0;
     float tot = 0.0;
-    float penalty = 1000.0;
     for (size_t i = 0; i < N; i++) {
         if (isnan(m[i]) || isinf(m[i]) || m[i] < 0.0)
             continue;
@@ -91,7 +90,7 @@ float optimizer(size_t N, size_t K, path_t *path, float deadline)
     size_t iters = 1000000, unchanged = 0;
     for (size_t i = 0; i < iters; i++) {
         int id = de_ask(solver, candidate);
-        float fitness = transfer_time(N, K, candidate, path);
+        float fitness = transfer_time(N, K, deadline, candidate, path);
 
         Z = de_best(solver, NULL);
         if (fitness + epsilon < Z) {
