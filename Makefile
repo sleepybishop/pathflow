@@ -1,4 +1,4 @@
-CFLAGS = -std=c99 -Iamoeba -O0 -g -D_DEFAULT_SOURCE
+CFLAGS = -std=c99 -Ide -O0 -g -D_DEFAULT_SOURCE
 LDLIBS = -lm 
 
 all: pathflow 

@@ -1,9 +1,11 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <float.h>
+#include <time.h>
 
-#define AM_IMPLEMENTATION
-#include "amoeba.h"
+#define DIFFERENTIAL_EVOLUTION_IMPL
+#include "de.h"
 
 #define CLAMP(x, a, b) ((x < (a)) ? (a) : ((x > b) ? b : x))
 
@@ -42,40 +44,66 @@ size_t psi(size_t Ps, size_t m, float p)
     return m + ((n < 0) ? 0 : n);
 }
 
-float optimizer(size_t N, size_t Kval, path_t *path)
+float path_time(size_t m, path_t *path)
+{
+    return m / path->b + path->l + path->q / path->b;
+};
+
+float transfer_time(size_t N, size_t K, float *m, path_t *path)
+{
+    float ret = 0.0;
+    float tot = 0.0;
+    float penalty = 1000.0;
+    for (size_t i = 0; i < N; i++) {
+        if (isnan(m[i]) || isinf(m[i]) || m[i] < 0.0)
+            continue;
+        tot += m[i];
+    }
+    ret += fabs(K - tot) * penalty;
+
+    float slowest = 0.0;
+    for (size_t i = 0; i < N; i++) {
+        slowest = fmax(slowest, path_time(m[i], &path[i]));
+    }
+    ret += slowest;
+
+    return ret;
+}
+
+float optimizer(size_t N, size_t K, path_t *path, float deadline)
 {
     int ret = 0;
-    float Zval = 0.0;
-    am_Solver *solver;
-    am_Num m[N], Z;
-    am_Id vm[N], vZ;
-    am_Constraint *c[N], *K;
 
-    solver = am_newsolver(NULL, NULL);
-    if (solver == NULL)
+    de_optimiser *solver = de_init(&(de_settings){
+        .dimension_count = N,
+        .population_count = 10.0 * N,
+        .lower_bound = 0.0f,
+        .upper_bound = deadline,
+        .random_seed = 0x5eed,
+    });
+    float *candidate = calloc(N, sizeof(float));
+
+    if (solver == NULL || candidate == NULL)
         return -1;
-    vZ = am_newvariable(solver, &Z);
-    K = am_newconstraint(solver, AM_REQUIRED);
-    am_addconstant(K, Kval);
-    am_setrelation(K, AM_EQUAL);
 
-    for (int i = 0; i < N; i++) {
-        vm[i] = am_newvariable(solver, &m[i]);
-        c[i] = am_newconstraint(solver, AM_REQUIRED);
-        am_addterm(c[i], vZ, 1.0);
-        am_setrelation(c[i], AM_GREATEQUAL);
-        am_addterm(c[i], vm[i], 1.0 / path[i].b);
-        am_addconstant(c[i], path[i].l + path[i].q / path[i].b);
-        am_add(c[i]);
-        am_addterm(K, vm[i], 1.0);
-    }
-    am_add(K);
+    float Z = FLT_MAX;
+    for (size_t i = 0; i < 500000; i++) {
+        int id = de_ask(solver, candidate);
+        float fitness = transfer_time(N, K, candidate, path);
+        de_tell(solver, id, candidate, fitness);
 
-    am_updatevars(solver);
-    for (int i = 0; i < N; i++) {
-        path[i].m = (size_t)ceil(m[i]);
+        if (i % 10000 == 0) {
+            Z = de_best(solver, NULL);
+            //printf("Step [%08zu] fitness: %10.10e\n", i, Z);
+        }
     }
-    am_delsolver(solver);
+    Z = de_best(solver, candidate);
+    for (int i = 0; i < N; i++) {
+        path[i].m = (size_t)round(candidate[i]);
+    }
+    free(candidate);
+    de_deinit(solver);
+
     return Z;
 }
 
@@ -107,7 +135,7 @@ int main(int argc, char *arvg[])
     if (i != N)
         exit(-1);
 
-    float total_time = optimizer(N, K, path);
+    float total_time = optimizer(N, K, path, 60.0);
     printf("estimated transfer time: %.2fs\n", total_time);
     for (i = 0; i < N; i++) {
         printf("m[%2d]: %4zu with %4.1f%% loss -> %4zu\n", i, path[i].m, 100.0 * (path[i].p), (size_t)psi(Ps*100, path[i].m, path[i].p));
