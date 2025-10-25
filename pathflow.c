@@ -44,12 +44,12 @@ size_t psi(size_t Ps, size_t m, float p)
     return m + ((n < 0) ? 0 : n);
 }
 
-float path_time(size_t m, path_t *path)
+float path_time(size_t m, path_t *path, size_t Ps)
 {
-    return m / path->b + path->l + path->q / path->b;
+    return psi(Ps, m, path->p) / path->b + path->l + path->q / path->b;
 };
 
-float transfer_time(size_t N, size_t K, float penalty, float *m, path_t *path)
+float transfer_time(size_t N, size_t K, float penalty, float *m, path_t *path, size_t Ps)
 {
     float num = 0.0, slowest = 0.0;
     for (size_t i = 0; i < N; i++) {
@@ -58,12 +58,12 @@ float transfer_time(size_t N, size_t K, float penalty, float *m, path_t *path)
             continue;
         }
         num += m[i];
-        slowest = fmax(slowest, path_time(m[i], &path[i]));
+        slowest = fmax(slowest, path_time(m[i], &path[i], Ps));
     }
     return fabs(K - num) * penalty + slowest;
 }
 
-float optimizer(size_t N, size_t K, path_t *path, float deadline)
+float optimizer(size_t N, size_t K, path_t *path, float deadline, size_t Ps)
 {
     int ret = 0;
 
@@ -84,7 +84,7 @@ float optimizer(size_t N, size_t K, path_t *path, float deadline)
     size_t iters = 1000000, unchanged = 0;
     for (size_t i = 0; i < iters; i++) {
         int id = de_ask(solver, candidate);
-        float fitness = transfer_time(N, K, deadline, candidate, path);
+        float fitness = transfer_time(N, K, deadline, candidate, path, Ps);
 
         Z = de_best(solver, NULL);
         if (fitness + epsilon < Z) {
@@ -110,7 +110,7 @@ int main(int argc, char *arvg[])
 {
     path_t path[16] = {0};
     size_t N = 0, K = 0;
-    float Ps = 0.0;
+    float Ps_f = 0.0;
 
     FILE *in = fopen("problem.txt", "r");
     if (!in)
@@ -118,11 +118,12 @@ int main(int argc, char *arvg[])
 
     fscanf(in, "N: %zu\n", &N);
     fscanf(in, "K: %zu\n", &K);
-    fscanf(in, "Ps: %f\n", &Ps);
+    fscanf(in, "Ps: %f\n", &Ps_f);
     N = CLAMP(N, 0, 16);
     K = CLAMP(K, 10, 1000);
-    Ps = CLAMP(Ps, 0.01, 0.99);
-    printf("N: %zu, K: %zu, Ps: %.2f\n", N, K, Ps);
+    Ps_f = CLAMP(Ps_f, 0.01, 0.99);
+    size_t Ps = Ps_f * 100;
+    printf("N: %zu, K: %zu, Ps: %.2f\n", N, K, Ps_f);
     int i = 0;
     for (i = 0; i < N && !feof(in); i++) {
         int got = fscanf(in, "%f %f %f %zu\n", &path[i].b, &path[i].l, &path[i].p, &path[i].q);
@@ -134,11 +135,10 @@ int main(int argc, char *arvg[])
     if (i != N)
         exit(-1);
 
-    float total_time = optimizer(N, K, path, 60.0);
+    float total_time = optimizer(N, K, path, 60.0, Ps);
     printf("estimated transfer time: %.2fs\n", total_time);
     for (i = 0; i < N; i++) {
-        printf("m[%2d]: %4zu with %4.1f%% loss -> %4zu\n", i, path[i].m, 100.0 * (path[i].p),
-               (size_t)psi(Ps * 100, path[i].m, path[i].p));
+        printf("m[%2d]: %4zu with %4.1f%% loss -> %4zu\n", i, path[i].m, 100.0 * (path[i].p), psi(Ps, path[i].m, path[i].p));
     }
 
     return 0;
