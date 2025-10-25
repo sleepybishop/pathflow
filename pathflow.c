@@ -15,6 +15,8 @@ typedef struct {
     float l;  // latency
     size_t q; // packets in queue
     size_t m; // packets allocated to this link
+    size_t x; // redundant packets for estimated loss
+    float t;  // estimated transfer time for this link
 } path_t;
 
 /**
@@ -99,6 +101,8 @@ float optimizer(size_t N, size_t K, path_t *path, float deadline, size_t Ps)
     }
     for (int i = 0; i < N; i++) {
         path[i].m = (size_t)round(candidate[i]);
+        path[i].x = psi(Ps, path[i].m, path[i].p);
+        path[i].t = path_time(path[i].m, &path[i], Ps);
     }
     free(candidate);
     de_deinit(solver);
@@ -137,9 +141,16 @@ int main(int argc, char *arvg[])
 
     float total_time = optimizer(N, K, path, 60.0, Ps);
     printf("estimated transfer time: %.2fs\n", total_time);
-    for (i = 0; i < N; i++) {
-        printf("m[%2d]: %4zu with %4.1f%% loss -> %4zu\n", i, path[i].m, 100.0 * (path[i].p), psi(Ps, path[i].m, path[i].p));
+    size_t alloc = 0, extra = 0;
+    printf("%5s: %5s + %5s  [ %6s | %6s | %6s ] -> %8s\n", "path", "alloc", "extra", "tput", "lat", "loss", "xfer");
+    for (int j = 0; j < N; j++) {
+        alloc += path[j].m;
+        extra += path[j].x;
+
+        printf("m[%2d]: %5zu + %5zu  [ %6.0f | %6.1f | %6.1f ] -> %8.3f\n", j, (size_t)path[j].m, path[j].x - path[j].m, path[j].b,
+               path[j].l, path[j].p, path[j].t);
     }
+    printf("m[xx]: %5zu   %5zu\n", alloc, extra);
 
     return 0;
 }
