@@ -51,22 +51,16 @@ float path_time(size_t m, path_t *path)
 
 float transfer_time(size_t N, size_t K, float penalty, float *m, path_t *path)
 {
-    float ret = 0.0;
-    float tot = 0.0;
+    float num = 0.0, slowest = 0.0;
     for (size_t i = 0; i < N; i++) {
-        if (isnan(m[i]) || isinf(m[i]) || m[i] < 0.0)
+        if (isnan(m[i]) || isinf(m[i]) || m[i] < 0.0 || m[i] > K) {
+            m[i] = 0.0;
             continue;
-        tot += m[i];
-    }
-    ret += fabs(K - tot) * penalty;
-
-    float slowest = 0.0;
-    for (size_t i = 0; i < N; i++) {
+        }
+        num += m[i];
         slowest = fmax(slowest, path_time(m[i], &path[i]));
     }
-    ret += slowest;
-
-    return ret;
+    return fabs(K - num) * penalty + slowest;
 }
 
 float optimizer(size_t N, size_t K, path_t *path, float deadline)

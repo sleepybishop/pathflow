@@ -1,3 +1,6 @@
 [submodule "amoeba"]
 	path = amoeba
 	url = https://github.com/starwing/amoeba
+[submodule "de"]
+	path = de
+	url = https://github.com/cshenton/de.git
