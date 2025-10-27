@@ -22,7 +22,6 @@ typedef struct {
 /**
  * return zscore given probability of success
  **/
-
 float qnorm(size_t P)
 {
     if (P == 50)
@@ -39,6 +38,9 @@ float qnorm(size_t P)
     return (P > 50) ? z_c[P - 51] : -z_c[49 - P];
 }
 
+/**
+ * estimate packets needed across lossy link given success probability
+ **/
 size_t psi(size_t Ps, size_t m, float p)
 {
     float mp = m * p;
@@ -54,15 +56,16 @@ float path_time(size_t m, path_t *path, size_t Ps)
 float transfer_time(size_t N, size_t K, float penalty, float *m, path_t *path, size_t Ps)
 {
     float num = 0.0, slowest = 0.0;
+    size_t bad = 0;
     for (size_t i = 0; i < N; i++) {
         if (isnan(m[i]) || isinf(m[i]) || m[i] < 0.0 || m[i] > K) {
-            m[i] = 0.0;
+            bad++;
             continue;
         }
         num += m[i];
         slowest = fmax(slowest, path_time(m[i], &path[i], Ps));
     }
-    return fabs(K - num) * penalty + slowest;
+    return fabs(K - num) * penalty + slowest + bad * penalty;
 }
 
 float optimizer(size_t N, size_t K, path_t *path, float deadline, size_t Ps)
@@ -99,6 +102,7 @@ float optimizer(size_t N, size_t K, path_t *path, float deadline, size_t Ps)
         }
         de_tell(solver, id, candidate, fitness);
     }
+    Z = de_best(solver, candidate);
     for (int i = 0; i < N; i++) {
         path[i].m = (size_t)round(candidate[i]);
         path[i].x = psi(Ps, path[i].m, path[i].p);
@@ -114,7 +118,7 @@ int main(int argc, char *arvg[])
 {
     path_t path[16] = {0};
     size_t N = 0, K = 0;
-    float Ps_f = 0.0;
+    float Ps_f = 0.0, deadline = 60.0;
 
     FILE *in = fopen("problem.txt", "r");
     if (!in)
@@ -139,7 +143,7 @@ int main(int argc, char *arvg[])
     if (i != N)
         exit(-1);
 
-    float total_time = optimizer(N, K, path, 60.0, Ps);
+    float total_time = optimizer(N, K, path, deadline, Ps);
     printf("estimated transfer time: %.2fs\n", total_time);
     size_t alloc = 0, extra = 0;
     printf("%5s: %5s + %5s  [ %6s | %6s | %6s ] -> %8s\n", "path", "alloc", "extra", "tput", "lat", "loss", "xfer");
