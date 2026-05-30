@@ -27,4 +27,4 @@ scan:
 	scan-build $(MAKE) clean all
 
 indent:
-	clang-format -style=LLVM -i *.c *.h
+	clang-format -style="{BasedOnStyle: LLVM, IndentWidth: 4}" -i *.c *.h

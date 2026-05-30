@@ -1,13 +1,12 @@
+#include "pathflow.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
-#include "pathflow.h"
 
 #define CLAMP(x, a, b) ((x < (a)) ? (a) : ((x > (b)) ? (b) : (x)))
 
-int main()
-{
+int main() {
     path_t path[MAX_LINKS] = {0};
     size_t N = 0, K = 0;
     float Ps_f = 0.0, deadline = 60.0;
@@ -53,11 +52,13 @@ int main()
 
     for (size_t j = 0; j < N; j++) {
         if (path[j].p >= 0.20f || path[j].l >= 2.0f) {
-            printf("path[%zu] %f %f %f %zu (DROPPED)\n", j, path[j].b, path[j].l, path[j].p, path[j].q);
+            printf("path[%zu] %f %f %f %zu (DROPPED)\n", j, path[j].b,
+                   path[j].l, path[j].p, path[j].q);
         } else {
             active_paths[active_N] = path[j];
             map[active_N] = j;
-            printf("path[%zu] %f %f %f %zu\n", j, path[j].b, path[j].l, path[j].p, path[j].q);
+            printf("path[%zu] %f %f %f %zu\n", j, path[j].b, path[j].l,
+                   path[j].p, path[j].q);
             active_N++;
         }
     }
@@ -67,7 +68,9 @@ int main()
         exit(-1);
     }
 
-    float total_time = pathflow_optimize(active_N, K, active_paths, 10000.0f, Ps); // Use a fixed large penalty for DE
+    float total_time =
+        pathflow_optimize(active_N, K, active_paths, 10000.0f,
+                          Ps); // Use a fixed large penalty for DE
 
     for (size_t j = 0; j < active_N; j++) {
         size_t orig = map[j];
@@ -76,17 +79,21 @@ int main()
 
     printf("estimated transfer time: %.2fs\n", total_time);
     if (total_time > deadline) {
-        printf("WARNING: Estimated transfer time exceeds the deadline of %.2fs!\n", deadline);
+        printf(
+            "WARNING: Estimated transfer time exceeds the deadline of %.2fs!\n",
+            deadline);
     }
 
     size_t alloc = 0, extra = 0;
-    printf("%5s: %5s + %5s  [ %6s | %6s | %6s ] -> %8s\n", "path", "alloc", "extra", "tput", "lat", "loss", "xfer");
+    printf("%5s: %5s + %5s  [ %6s | %6s | %6s ] -> %8s\n", "path", "alloc",
+           "extra", "tput", "lat", "loss", "xfer");
     for (size_t j = 0; j < N; j++) {
         alloc += path[j].m;
         extra += path[j].x;
 
-        printf("m[%2zu]: %5zu + %5zu  [ %6.0f | %6.3f | %6.3f ] -> %8.3f\n", j, (size_t)path[j].m, path[j].x - path[j].m, path[j].b,
-               path[j].l, path[j].p, path[j].t);
+        printf("m[%2zu]: %5zu + %5zu  [ %6.0f | %6.3f | %6.3f ] -> %8.3f\n", j,
+               (size_t)path[j].m, path[j].x - path[j].m, path[j].b, path[j].l,
+               path[j].p, path[j].t);
     }
     printf("m[xx]: %5zu   %5zu\n", alloc, extra);
 

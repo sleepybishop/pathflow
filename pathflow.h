@@ -23,7 +23,9 @@ typedef struct {
     int initialized;
 } path_state_t;
 
-void pathflow_update_state(path_state_t *state, float b, float l, float p, size_t q, float alpha);
-float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight, size_t Ps);
+void pathflow_update_state(path_state_t *state, float b, float l, float p,
+                           size_t q, float alpha);
+float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight,
+                        size_t Ps);
 
 #endif // PATHFLOW_H
