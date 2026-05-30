@@ -1,4 +1,4 @@
-# pathflow
+# pathflow [![CI](https://github.com/sleepybishop/pathflow/actions/workflows/ci.yml/badge.svg)](https://github.com/sleepybishop/pathflow/actions/workflows/ci.yml)
 
 pathflow will determine the optimum set of packets to send via a collection of paths with known characteristics:
 
@@ -7,22 +7,29 @@ pathflow will determine the optimum set of packets to send via a collection of p
  - Loss rate
  - Packets enqueued
 
-the problem is defined in the `problem.txt` file, in the following format:
+The problem is defined in the `problem.txt` file, in the following format:
 
-```
+```text
 N: <number of paths>
 K: <number of packets in payload>
 Ps: <probability of success>
 ```
 
-followed by `N` lines in the format 
+Followed by `N` lines in the format:
 
-```
+```text
 <packets/s> <latency> <loss rate> <packets in queue>
 ```
 
-implementation based on [AeroMTP][1]
+## Build & Usage
+
+To build the project, simply run `make`. 
+This will generate the `pathflow` CLI executable and a `libpathflow.a` static library for use in your own applications.
+
+You can verify the algorithms are working correctly by running `make test`.
+
+## References
+
+Implementation based on [AeroMTP][1].
 
 [1]: https://doi.org/10.1016/j.cja.2015.05.010
-
-
