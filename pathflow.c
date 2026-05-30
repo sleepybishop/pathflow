@@ -12,10 +12,15 @@
 
 #include "pathflow.h"
 
-static float qnorm(size_t P) {
-    if (P == 50) return 0.0f;
-    if (P <= 0) return -3.090f;
-    if (P >= 100) return 3.090f;
+/* return zscore given probability of success */
+static float qnorm(size_t P)
+{
+    if (P == 50)
+        return 0.0f;
+    if (P <= 0)
+        return -3.090f;
+    if (P >= 100)
+        return 3.090f;
     static const float z_c[] = {0.025f, 0.050f, 0.075f, 0.100f, 0.126f, 0.151f, 0.176f, 0.202f, 0.228f, 0.253f,
                                 0.279f, 0.305f, 0.332f, 0.358f, 0.385f, 0.412f, 0.440f, 0.468f, 0.496f, 0.524f,
                                 0.553f, 0.583f, 0.613f, 0.643f, 0.674f, 0.706f, 0.739f, 0.772f, 0.806f, 0.842f,
@@ -24,34 +29,43 @@ static float qnorm(size_t P) {
     return (P > 50) ? z_c[P - 51] : -z_c[49 - P];
 }
 
-static size_t psi(size_t Ps, size_t m, float p) {
+/* estimate packets needed across lossy link given success probability */
+static size_t psi(size_t Ps, size_t m, float p)
+{
     float mp = (float)m * p;
     float val = (qnorm(Ps) * sqrt(mp) + mp) / (1.0f - p);
     size_t n = (val < 0.0f) ? 0 : (size_t)ceil(val);
     return m + n;
 }
 
-static float path_time(size_t m, const path_t *path, size_t Ps) {
-    if (path->b <= 0.0f) return FLT_MAX;
+static float path_time(size_t m, const path_t *path, size_t Ps)
+{
+    if (path->b <= 0.0f)
+        return FLT_MAX;
     return psi(Ps, m, path->p) / path->b + path->l + path->q / path->b;
 }
 
-static float greedy_solver(size_t N, size_t K, path_t *path, size_t Ps) {
+static float greedy_solver(size_t N, size_t K, path_t *path, size_t Ps)
+{
+    N = (N > MAX_LINKS) ? MAX_LINKS : N;
+    float next_times[MAX_LINKS];
+
     for (size_t i = 0; i < N; i++) {
         path[i].m = 0;
+        next_times[i] = path_time(1, &path[i], Ps);
     }
 
     for (size_t k = 0; k < K; k++) {
         size_t best_idx = 0;
         float min_time = FLT_MAX;
         for (size_t i = 0; i < N; i++) {
-            float t = path_time(path[i].m + 1, &path[i], Ps);
-            if (t < min_time) {
-                min_time = t;
+            if (next_times[i] < min_time) {
+                min_time = next_times[i];
                 best_idx = i;
             }
         }
         path[best_idx].m++;
+        next_times[best_idx] = path_time(path[best_idx].m + 1, &path[best_idx], Ps);
     }
 
     float slowest = 0.0f;
@@ -65,7 +79,8 @@ static float greedy_solver(size_t N, size_t K, path_t *path, size_t Ps) {
     return slowest;
 }
 
-static float transfer_time(size_t N, size_t K, float penalty_weight, const float *m, const path_t *path, size_t Ps) {
+static float transfer_time(size_t N, size_t K, float penalty_weight, const float *m, const path_t *path, size_t Ps)
+{
     float num = 0.0, slowest = 0.0;
     for (size_t i = 0; i < N; i++) {
         float clamped_m = CLAMP(m[i], 0.0f, (float)K);
@@ -78,7 +93,26 @@ static float transfer_time(size_t N, size_t K, float penalty_weight, const float
     return fabs(K - num) * penalty_weight + slowest;
 }
 
-float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight, size_t Ps) {
+void pathflow_update_state(path_state_t *state, float b, float l, float p, size_t q, float alpha)
+{
+    if (!state->initialized) {
+        state->b_ewma = b;
+        state->l_ewma = l;
+        state->p_ewma = p;
+        state->q_ewma = q;
+        state->initialized = 1;
+    } else {
+        state->b_ewma = alpha * b + (1.0f - alpha) * state->b_ewma;
+        state->l_ewma = alpha * l + (1.0f - alpha) * state->l_ewma;
+        state->p_ewma = alpha * p + (1.0f - alpha) * state->p_ewma;
+        state->q_ewma = (size_t)roundf(alpha * (float)q + (1.0f - alpha) * (float)state->q_ewma);
+    }
+}
+
+float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight, size_t Ps)
+{
+    N = (N > MAX_LINKS) ? MAX_LINKS : N;
+
     de_optimiser *solver = de_init(&(de_settings){
         .dimension_count = N,
         .population_count = 20 * N,
@@ -86,23 +120,17 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight, 
         .upper_bound = (float)K,
         .random_seed = 0x5eed,
     });
-    float *candidate = calloc(N, sizeof(float));
+    float candidate[MAX_LINKS];
 
-    if (solver == NULL || candidate == NULL) {
-        if (solver) de_deinit(solver);
-        if (candidate) free(candidate);
+    if (solver == NULL) {
         return -1;
     }
 
     float greedy_fitness = greedy_solver(N, K, path, Ps);
-    float *greedy_candidate = malloc(N * sizeof(float));
-    if (greedy_candidate) {
-        for (size_t i = 0; i < N; i++) {
-            greedy_candidate[i] = (float)path[i].m;
-        }
-        de_tell(solver, 0, greedy_candidate, greedy_fitness);
-        free(greedy_candidate);
+    for (size_t i = 0; i < N; i++) {
+        candidate[i] = (float)path[i].m;
     }
+    de_tell(solver, 0, candidate, greedy_fitness);
 
     float Z = FLT_MAX;
     float epsilon = 1e-6;
@@ -118,7 +146,8 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight, 
             Z = current_best;
         } else {
             unchanged++;
-            if (unchanged == iters / 10) break;
+            if (unchanged == iters / 10)
+                break;
         }
     }
     Z = de_best(solver, candidate);
@@ -128,7 +157,6 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight, 
         path[i].x = psi(Ps, path[i].m, path[i].p);
         path[i].t = (path[i].m > 0) ? path_time(path[i].m, &path[i], Ps) : 0.0f;
     }
-    free(candidate);
     de_deinit(solver);
 
     return Z;
