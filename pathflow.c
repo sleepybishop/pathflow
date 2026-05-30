@@ -95,6 +95,7 @@ static float transfer_time(size_t N, size_t K, float penalty_weight,
 
 void pathflow_update_state(path_state_t *state, float b, float l, float p,
                            size_t q, float alpha) {
+    alpha = CLAMP(alpha, 0.0f, 1.0f);
     if (!state->initialized) {
         state->b_ewma = b;
         state->l_ewma = l;
