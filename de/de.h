@@ -131,13 +131,15 @@ de_optimiser *de_init(de_settings *settings)
         return NULL;
     }
 
-    // Seed the xoroshiro128+ state with calls to rand()
+    // Seed the xoshiro128+ state using splitmix32
     uint32_t rng[4];
-    uint16_t *rng_view = (uint16_t *)rng;
-    srand(random_seed);
-    for (int i = 0; i < 8; i++)
+    uint32_t sm_state = random_seed;
+    for (int i = 0; i < 4; i++)
     {
-        rng_view[i] = (uint16_t)(rand() % 65535);
+        uint32_t z = (sm_state += 0x9e3779b9);
+        z = (z ^ (z >> 16)) * 0x85ebca6b;
+        z = (z ^ (z >> 13)) * 0xc2b2ae35;
+        rng[i] = z ^ (z >> 16);
     }
 
     // Initialise crossover to random values in [0, 1]
@@ -207,12 +209,18 @@ int de_ask(de_optimiser *opt, float *out_candidate)
     // Choose a random dimension to change with certainty
     int mut_dim = de__next(opt->rng) % dimension_count;
 
+    const float lower_bound = opt->lower_bound;
+    const float upper_bound = opt->upper_bound;
+
     // Apply the crossover to the output array
     for (int i = 0; i < dimension_count; i++)
     {
         if (de__next_float(opt->rng) < crossover_prob || i == mut_dim)
         {
-            out_candidate[i] = a[i] + differential_weight * (b[i] - c[i]);
+            float val = a[i] + differential_weight * (b[i] - c[i]);
+            if (val < lower_bound) val = lower_bound;
+            if (val > upper_bound) val = upper_bound;
+            out_candidate[i] = val;
         }
         else
         {
