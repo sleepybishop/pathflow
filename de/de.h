@@ -190,11 +190,12 @@ int de_ask(de_optimiser *opt, float *out_candidate)
     const int population_count = opt->population_count;
     const int dimension_count = opt->dimension_count;
 
-    // Randomly choose an id and three nearby ids
+    // Randomly choose an id and three distinct nearby ids
     int x_id = de__next(opt->rng) % population_count;
-    int a_id = (x_id + de__next(opt->rng) % neighbour_radius) % population_count;
-    int b_id = (x_id + de__next(opt->rng) % neighbour_radius) % population_count;
-    int c_id = (x_id + de__next(opt->rng) % neighbour_radius) % population_count;
+    int a_id, b_id, c_id;
+    do { a_id = (x_id + de__next(opt->rng) % neighbour_radius) % population_count; } while (a_id == x_id);
+    do { b_id = (x_id + de__next(opt->rng) % neighbour_radius) % population_count; } while (b_id == x_id || b_id == a_id);
+    do { c_id = (x_id + de__next(opt->rng) % neighbour_radius) % population_count; } while (c_id == x_id || c_id == a_id || c_id == b_id);
 
     // Get the crossover params for x
     float crossover_prob = opt->crossover_probs[x_id];
