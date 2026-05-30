@@ -27,9 +27,12 @@ int main() {
         exit(-1);
     }
 
-    fscanf(in, "N: %zu\n", &N);
-    fscanf(in, "K: %zu\n", &K);
-    fscanf(in, "Ps: %f\n", &Ps_f);
+    if (fscanf(in, "N: %zu\n", &N) != 1 ||
+        fscanf(in, "K: %zu\n", &K) != 1 ||
+        fscanf(in, "Ps: %f\n", &Ps_f) != 1) {
+        fprintf(stderr, "Failed to parse problem.txt headers\n");
+        exit(-1);
+    }
     N = (N > MAX_LINKS) ? MAX_LINKS : N;
     K = (K < 1) ? 1 : ((K > 1000) ? 1000 : K);
     Ps_f = CLAMP(Ps_f, 0.01f, 0.99f);
