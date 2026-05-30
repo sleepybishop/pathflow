@@ -1,11 +1,24 @@
-CFLAGS = -std=c99 -Ide -O0 -g -D_DEFAULT_SOURCE
-LDLIBS = -lm 
+CFLAGS = -std=c99 -Ide -O0 -g -D_DEFAULT_SOURCE -Wall -Wextra
+LDLIBS = -lm
 
-all: pathflow 
+all: libpathflow.a pathflow
 
-pathflow: pathflow.c
+pathflow.o: pathflow.c pathflow.h
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-.PHONY: clean scan indent
+libpathflow.a: pathflow.o
+	$(AR) rcs $@ $^
+
+pathflow: cli.c libpathflow.a
+	$(CC) $(CFLAGS) -o $@ cli.c libpathflow.a $(LDLIBS)
+
+check: all
+	prove -I. t/
+
+valgrind: clean all
+	valgrind --error-exitcode=2 --leak-check=full ./pathflow
+
+.PHONY: clean scan indent test check valgrind
 
 clean:
 	$(RM) *.o *.a pathflow
@@ -14,6 +27,4 @@ scan:
 	scan-build $(MAKE) clean all
 
 indent:
-	clang-format -style=LLVM -i *.c 
-
-
+	clang-format -style=LLVM -i *.c *.h
