@@ -32,6 +32,7 @@ static float qnorm(size_t P) {
 
 /* estimate packets needed across lossy link given success probability */
 static size_t psi(size_t Ps, size_t m, float p) {
+    p = CLAMP(p, 0.0f, 0.999f);
     float mp = (float)m * p;
     float val = (qnorm(Ps) * sqrt(mp) + mp) / (1.0f - p);
     size_t n = (val < 0.0f) ? 0 : (size_t)ceil(val);
