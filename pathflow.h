@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+#define MAX_LINKS 16
+
 typedef struct {
     float b;  // throughput (pkt/s)
     float p;  // loss rate

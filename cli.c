@@ -8,7 +8,7 @@
 
 int main()
 {
-    path_t path[16] = {0};
+    path_t path[MAX_LINKS] = {0};
     size_t N = 0, K = 0;
     float Ps_f = 0.0, deadline = 60.0;
 
@@ -19,12 +19,12 @@ int main()
     fscanf(in, "N: %zu\n", &N);
     fscanf(in, "K: %zu\n", &K);
     fscanf(in, "Ps: %f\n", &Ps_f);
-    N = (N > 16) ? 16 : N;
+    N = (N > MAX_LINKS) ? MAX_LINKS : N;
     K = (K < 1) ? 1 : ((K > 1000) ? 1000 : K);
     Ps_f = CLAMP(Ps_f, 0.01f, 0.99f);
     size_t Ps = (size_t)roundf(Ps_f * 100.0f);
     printf("N: %zu, K: %zu, Ps: %.2f\n", N, K, Ps_f);
-    path_state_t states[16] = {0};
+    path_state_t states[MAX_LINKS] = {0};
     float alpha = 0.25f;
 
     size_t i = 0;
@@ -47,8 +47,38 @@ int main()
     if (i != N)
         exit(-1);
 
-    float total_time = pathflow_optimize(N, K, path, deadline, Ps);
+    path_t active_paths[MAX_LINKS] = {0};
+    size_t active_N = 0;
+    size_t map[MAX_LINKS] = {0};
+
+    for (size_t j = 0; j < N; j++) {
+        if (path[j].p >= 0.20f || path[j].l >= 2.0f) {
+            printf("path[%zu] %f %f %f %zu (DROPPED)\n", j, path[j].b, path[j].l, path[j].p, path[j].q);
+        } else {
+            active_paths[active_N] = path[j];
+            map[active_N] = j;
+            printf("path[%zu] %f %f %f %zu\n", j, path[j].b, path[j].l, path[j].p, path[j].q);
+            active_N++;
+        }
+    }
+
+    if (active_N == 0) {
+        printf("ERROR: All paths dropped by fast-fail criteria.\n");
+        exit(-1);
+    }
+
+    float total_time = pathflow_optimize(active_N, K, active_paths, 10000.0f, Ps); // Use a fixed large penalty for DE
+
+    for (size_t j = 0; j < active_N; j++) {
+        size_t orig = map[j];
+        path[orig] = active_paths[j];
+    }
+
     printf("estimated transfer time: %.2fs\n", total_time);
+    if (total_time > deadline) {
+        printf("WARNING: Estimated transfer time exceeds the deadline of %.2fs!\n", deadline);
+    }
+
     size_t alloc = 0, extra = 0;
     printf("%5s: %5s + %5s  [ %6s | %6s | %6s ] -> %8s\n", "path", "alloc", "extra", "tput", "lat", "loss", "xfer");
     for (size_t j = 0; j < N; j++) {
