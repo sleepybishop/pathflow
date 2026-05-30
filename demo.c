@@ -10,7 +10,7 @@
 #define CLAMP(x, a, b) ((x < (a)) ? (a) : ((x > (b)) ? (b) : (x)))
 
 // Helper for generating random float between -1 and 1
-float randf() { return (float)drand48() * 2.0f - 1.0f; }
+float randf() { return ((float)rand() / RAND_MAX) * 2.0f - 1.0f; }
 
 #include <locale.h>
 
@@ -67,7 +67,7 @@ int main() {
     init_pair(3, COLOR_RED, -1);
     init_pair(4, COLOR_CYAN, -1);
 
-    srand48(time(NULL));
+    srand(time(NULL));
     float alpha = 0.1f;
     size_t tick_count = 0;
 
@@ -89,7 +89,7 @@ int main() {
         }
 
         for (size_t j = 0; j < N; j++) {
-            float r = (float)drand48();
+            float r = ((float)rand() / RAND_MAX);
             if (r < 0.005f) { // 0.5% chance to become Stormy (catastrophic)
                 target_path[j].p = CLAMP(base_path[j].p + 0.30f, 0.0f, 0.99f);
                 target_path[j].l = CLAMP(base_path[j].l + 1.00f, 0.0f, 5.0f);
