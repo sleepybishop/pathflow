@@ -6,7 +6,14 @@
 
 #define CLAMP(x, a, b) ((x < (a)) ? (a) : ((x > (b)) ? (b) : (x)))
 
-int main() {
+int main(int argc, char **argv) {
+    float max_p = 0.20f;
+    float max_l = 2.0f;
+    if (argc >= 3) {
+        max_p = atof(argv[1]);
+        max_l = atof(argv[2]);
+    }
+
     path_t path[MAX_LINKS] = {0};
     size_t N = 0, K = 0;
     float Ps_f = 0.0, deadline = 60.0;
@@ -54,7 +61,7 @@ int main() {
     size_t map[MAX_LINKS] = {0};
 
     for (size_t j = 0; j < N; j++) {
-        if (path[j].p >= 0.20f || path[j].l >= 2.0f) {
+        if (path[j].p >= max_p || path[j].l >= max_l) {
             printf("path[%zu] %f %f %f %zu (DROPPED)\n", j, path[j].b,
                    path[j].l, path[j].p, path[j].q);
         } else {

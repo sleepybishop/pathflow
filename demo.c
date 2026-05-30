@@ -14,7 +14,14 @@ float randf() { return ((float)rand() / RAND_MAX) * 2.0f - 1.0f; }
 
 #include <locale.h>
 
-int main() {
+int main(int argc, char **argv) {
+    float max_p = 0.20f;
+    float max_l = 2.0f;
+    if (argc >= 3) {
+        max_p = atof(argv[1]);
+        max_l = atof(argv[2]);
+    }
+
     setlocale(LC_ALL, "");
     path_t base_path[MAX_LINKS] = {0};
     path_state_t states[MAX_LINKS] = {0};
@@ -141,7 +148,7 @@ int main() {
         int dropped[MAX_LINKS] = {0};
 
         for (size_t j = 0; j < N; j++) {
-            if (path[j].p >= 0.20f || path[j].l >= 2.0f) {
+            if (path[j].p >= max_p || path[j].l >= max_l) {
                 dropped[j] = 1;
             } else {
                 active_paths[active_N] = path[j];
