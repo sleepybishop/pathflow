@@ -12,6 +12,9 @@ libpathflow.a: pathflow.o
 pathflow: cli.c libpathflow.a
 	$(CC) $(CFLAGS) -o $@ cli.c libpathflow.a $(LDLIBS)
 
+demo: demo.c libpathflow.a
+	$(CC) $(CFLAGS) -o $@ demo.c libpathflow.a $(LDLIBS) -lncurses
+
 check: all
 	prove -I. t/
 
@@ -21,7 +24,7 @@ valgrind: clean all
 .PHONY: clean scan indent test check valgrind
 
 clean:
-	$(RM) *.o *.a pathflow
+	$(RM) *.o *.a pathflow demo
 
 scan:
 	scan-build $(MAKE) clean all

@@ -28,6 +28,17 @@ This will generate the `pathflow` CLI executable and a `libpathflow.a` static li
 
 You can verify the algorithms are working correctly by running `make test`.
 
+## Dynamic Dashboard
+
+You can watch the algorithm react to simulated network conditions in real-time by running the interactive ncurses dashboard:
+
+```bash
+make demo
+./demo
+```
+
+The simulator creates a Markov "weather" model where links occasionally experience catastrophic drops or miraculous recoveries. The algorithm uses an EWMA filter to smooth out continuous random jitter and seamlessly redirects packet allocations on the fly. Press `q` to quit the dashboard.
+
 ## References
 
 Implementation based on [AeroMTP][1].
