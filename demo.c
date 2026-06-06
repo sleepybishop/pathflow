@@ -34,8 +34,7 @@ int main(int argc, char **argv) {
         exit(-1);
     }
 
-    if (fscanf(in, "N: %zu\n", &N) != 1 ||
-        fscanf(in, "K: %zu\n", &K) != 1 ||
+    if (fscanf(in, "N: %zu\n", &N) != 1 || fscanf(in, "K: %zu\n", &K) != 1 ||
         fscanf(in, "Ps: %f\n", &Ps_f) != 1) {
         fprintf(stderr, "Failed to parse problem.txt headers\n");
         exit(-1);
