@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Exporter 'import';
 
-our @EXPORT = qw(run_simulation);
+our @EXPORT = qw(run_simulation write_problem execute_solver);
 
 sub write_problem {
     my ($N, $K, $Ps, $paths) = @_;
@@ -19,6 +19,7 @@ sub execute_solver {
     my ($algorithm, $K) = @_;
     my $cmd = "./pathflow";
     
+    local $ENV{PATHFLOW_SOLVER} = $algorithm if $algorithm;
     my $output = `$cmd 2>&1`;
     my $exit_code = $?;
     
