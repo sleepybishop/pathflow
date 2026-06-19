@@ -39,8 +39,4 @@ make demo
 
 The simulator creates a Markov "weather" model where links occasionally experience catastrophic drops or miraculous recoveries. The algorithm uses an EWMA filter to smooth out continuous random jitter and seamlessly redirects packet allocations on the fly. Press `q` to quit the dashboard.
 
-## References
 
-Implementation based on [AeroMTP][1].
-
-[1]: https://doi.org/10.1016/j.cja.2015.05.010
