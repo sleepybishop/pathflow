@@ -5,12 +5,10 @@
 #include <string.h>
 #include <time.h>
 
-#define DIFFERENTIAL_EVOLUTION_IMPL
-#include "de.h"
-
 #define CLAMP(x, a, b) ((x < (a)) ? (a) : ((x > (b)) ? (b) : (x)))
 
 #include "pathflow.h"
+#include "solvers.h"
 
 /* return zscore given probability of success */
 static float qnorm(size_t P) {
@@ -115,7 +113,24 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight,
                         size_t Ps) {
     N = (N > MAX_LINKS) ? MAX_LINKS : N;
 
-    de_optimiser *solver = de_init(&(de_settings){
+    /* Select solver plugin based on environment variable PATHFLOW_SOLVER */
+    const solver_interface_t *plugin = &de_plugin;
+    const char *env_solver = getenv("PATHFLOW_SOLVER");
+    if (env_solver != NULL) {
+        if (strcmp(env_solver, "sa") == 0) {
+            plugin = &sa_plugin;
+        } else if (strcmp(env_solver, "pso") == 0) {
+            plugin = &pso_plugin;
+        } else if (strcmp(env_solver, "ga") == 0) {
+            plugin = &ga_plugin;
+        } else if (strcmp(env_solver, "aco") == 0) {
+            plugin = &aco_plugin;
+        } else if (strcmp(env_solver, "ts") == 0) {
+            plugin = &ts_plugin;
+        }
+    }
+
+    void *solver = plugin->init(&(solver_settings_t){
         .dimension_count = N,
         .population_count = 20 * N,
         .lower_bound = 0.0f,
@@ -132,18 +147,18 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight,
     for (size_t i = 0; i < N; i++) {
         candidate[i] = (float)path[i].m;
     }
-    de_tell(solver, 0, candidate, greedy_fitness);
+    plugin->tell(solver, 0, candidate, greedy_fitness);
 
     float Z = FLT_MAX;
     float epsilon = 1e-6;
     size_t iters = 1000000, unchanged = 0;
     for (size_t i = 0; i < iters; i++) {
-        int id = de_ask(solver, candidate);
+        int id = plugin->ask(solver, candidate);
         float fitness =
             transfer_time(N, K, penalty_weight, candidate, path, Ps);
-        de_tell(solver, id, candidate, fitness);
+        plugin->tell(solver, id, candidate, fitness);
 
-        float current_best = de_best(solver, NULL);
+        float current_best = plugin->best(solver, NULL);
         if (current_best + epsilon < Z) {
             unchanged = 0;
             Z = current_best;
@@ -153,14 +168,14 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight,
                 break;
         }
     }
-    Z = de_best(solver, candidate);
+    Z = plugin->best(solver, candidate);
     for (size_t i = 0; i < N; i++) {
         float clamped_candidate = CLAMP(candidate[i], 0.0f, (float)K);
         path[i].m = (size_t)round(clamped_candidate);
         path[i].x = psi(Ps, path[i].m, path[i].p);
         path[i].t = (path[i].m > 0) ? path_time(path[i].m, &path[i], Ps) : 0.0f;
     }
-    de_deinit(solver);
+    plugin->deinit(solver);
 
     return Z;
 }

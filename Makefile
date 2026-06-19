@@ -1,4 +1,4 @@
-CFLAGS = -std=c99 -Ide -O0 -g -D_DEFAULT_SOURCE -Wall -Wextra
+CFLAGS = -std=c99 -Isolvers/ -O3 -g -D_DEFAULT_SOURCE -Wall -Wextra
 LDLIBS = -lm
 
 all: libpathflow.a pathflow
