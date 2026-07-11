@@ -49,6 +49,14 @@ typedef struct de_optimiser
     uint32_t rng[4];             // PRNG state
 } de_optimiser;
 
+#define DE_MEMORY_REQUIRED(dimensions, population) ( \
+    sizeof(de_optimiser) +                           \
+    (sizeof(float) * (population)) +                 \
+    (sizeof(float) * (population)) +                 \
+    (sizeof(float) * (population)) +                 \
+    (sizeof(float) * (dimensions) * (population))    \
+)
+
 // Initialise the optimiser. Returns NULL if any allocation failed.
 de_optimiser *de_init(de_settings *settings);
 

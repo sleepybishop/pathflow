@@ -8,6 +8,49 @@
 #define CLAMP(x, a, b) ((x < (a)) ? (a) : ((x > (b)) ? (b) : (x)))
 
 #include "pathflow.h"
+#include <stdint.h>
+
+/* Static memory arena for solvers to avoid dynamic allocation */
+#ifndef PATHFLOW_ARENA_SIZE
+#define PATHFLOW_ARENA_SIZE                                                    \
+    262144 /* 256 KB should be plenty for N=16 pop=320 */
+#endif
+
+static uint8_t pathflow_arena[PATHFLOW_ARENA_SIZE];
+static size_t pathflow_arena_offset = 0;
+
+static void *pathflow_alloc(size_t sz) {
+    /* Align to 8 bytes */
+    size_t remainder = sz % 8;
+    if (remainder != 0)
+        sz += (8 - remainder);
+
+    if (pathflow_arena_offset + sz > PATHFLOW_ARENA_SIZE)
+        return NULL;
+    void *ptr = &pathflow_arena[pathflow_arena_offset];
+    pathflow_arena_offset += sz;
+    return ptr;
+}
+
+static void pathflow_free(void *p) {
+    (void)p; /* No-op, we reset the entire arena per optimization pass */
+}
+
+static void pathflow_arena_reset(void) { pathflow_arena_offset = 0; }
+
+#define DE_ALLOC(sz) pathflow_alloc(sz)
+#define DE_FREE(p) pathflow_free(p)
+#define SA_ALLOC(sz) pathflow_alloc(sz)
+#define SA_FREE(p) pathflow_free(p)
+#define PSO_ALLOC(sz) pathflow_alloc(sz)
+#define PSO_FREE(p) pathflow_free(p)
+#define GA_ALLOC(sz) pathflow_alloc(sz)
+#define GA_FREE(p) pathflow_free(p)
+#define ACO_ALLOC(sz) pathflow_alloc(sz)
+#define ACO_FREE(p) pathflow_free(p)
+#define TS_ALLOC(sz) pathflow_alloc(sz)
+#define TS_FREE(p) pathflow_free(p)
+
 #include "solvers.h"
 
 static inline size_t calculate_n(float c1, float c2, float m) {
@@ -139,6 +182,8 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight,
         c1[i] = (q * sqrtf(p)) / one_minus_p;
         c2[i] = p / one_minus_p;
     }
+
+    pathflow_arena_reset();
 
     /* Select solver plugin based on environment variable PATHFLOW_SOLVER */
     const solver_interface_t *plugin = &de_plugin;

@@ -64,6 +64,18 @@ typedef struct pso_optimiser {
     uint32_t rng[4];        /* PRNG state */
 } pso_optimiser;
 
+#define PSO_MEMORY_REQUIRED(dimensions, population) ( \
+    sizeof(pso_optimiser) +                           \
+    (sizeof(float) * (population)) +                  \
+    (sizeof(float) * (dimensions) * (population)) +   \
+    (sizeof(float) * (dimensions) * (population)) +   \
+    (sizeof(float) * (dimensions) * (population)) +   \
+    (sizeof(float) * (dimensions) * (population)) +   \
+    (sizeof(float) * (population)) +                  \
+    (sizeof(float) * (dimensions)) +                  \
+    (sizeof(int) * (population))                      \
+)
+
 /* Initialise the optimiser. Returns NULL if any allocation failed. */
 pso_optimiser *pso_init(pso_settings *settings);
 

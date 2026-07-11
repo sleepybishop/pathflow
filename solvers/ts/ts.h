@@ -60,6 +60,18 @@ typedef struct ts_optimiser {
     uint32_t rng[4];       /* PRNG state */
 } ts_optimiser;
 
+#define TS_MEMORY_REQUIRED(dimensions, population) ( \
+    sizeof(ts_optimiser) +                           \
+    (sizeof(float) * (population)) +                 \
+    (sizeof(float) * (dimensions) * (population)) +  \
+    (sizeof(int) * (population) * (dimensions) * (dimensions)) + \
+    (sizeof(int) * (population)) +                   \
+    (sizeof(int) * (population)) +                   \
+    (sizeof(int) * (population)) +                   \
+    (sizeof(int) * (population)) +                   \
+    (sizeof(float) * (dimensions))                   \
+)
+
 /* Initialise the optimiser. Returns NULL if any allocation failed. */
 ts_optimiser *ts_init(ts_settings *settings);
 

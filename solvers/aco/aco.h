@@ -58,6 +58,14 @@ typedef struct aco_optimiser {
     uint32_t rng[4];       /* PRNG state */
 } aco_optimiser;
 
+#define ACO_MEMORY_REQUIRED(dimensions, population, upper_bound) ( \
+    sizeof(aco_optimiser) +                                        \
+    (sizeof(float) * (population)) +                               \
+    (sizeof(float) * (dimensions) * (population)) +                \
+    (sizeof(float) * ((int)(upper_bound) + 1) * (dimensions)) +    \
+    (sizeof(float) * (dimensions))                                 \
+)
+
 /* Initialise the optimiser. Returns NULL if any allocation failed. */
 aco_optimiser *aco_init(aco_settings *settings);
 

@@ -58,6 +58,15 @@ typedef struct sa_optimiser {
     uint32_t rng[4];       /* PRNG state */
 } sa_optimiser;
 
+#define SA_MEMORY_REQUIRED(dimensions, population) ( \
+    sizeof(sa_optimiser) +                           \
+    (sizeof(float) * (population)) +                 \
+    (sizeof(float) * (dimensions) * (population)) +  \
+    (sizeof(float) * (population)) +                 \
+    (sizeof(int) * (population)) +                   \
+    (sizeof(float) * (dimensions))                   \
+)
+
 /* Initialise the optimiser. Returns NULL if any allocation failed. */
 sa_optimiser *sa_init(sa_settings *settings);
 

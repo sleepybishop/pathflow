@@ -54,6 +54,12 @@ typedef struct ga_optimiser {
     uint32_t rng[4];   /* PRNG state */
 } ga_optimiser;
 
+#define GA_MEMORY_REQUIRED(dimensions, population) ( \
+    sizeof(ga_optimiser) +                           \
+    (sizeof(float) * (population)) +                 \
+    (sizeof(float) * (dimensions) * (population))    \
+)
+
 /* Initialise the optimiser. Returns NULL if any allocation failed. */
 ga_optimiser *ga_init(ga_settings *settings);
 
