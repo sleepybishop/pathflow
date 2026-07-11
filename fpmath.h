@@ -30,7 +30,7 @@ typedef int64_t fp_t;
 #define FP_ONE ((fp_t)(1 << FP_FRAC_BITS))
 #define FP_MAX INT64_MAX
 
-#define FP_FROM_INT(x) ((fp_t)((x) * (1 << FP_FRAC_BITS)))
+#define FP_FROM_INT(x) ((fp_t)((int64_t)(x) * (1LL << FP_FRAC_BITS)))
 #define FP_TO_INT(x) ((x) >> FP_FRAC_BITS)
 #define FP_FROM_FLOAT(x) ((fp_t)((x) * (float)FP_ONE))
 #define FP_TO_FLOAT(x) ((float)(x) / (float)FP_ONE)
@@ -94,4 +94,4 @@ static inline fp_t fp_exp(fp_t x) {
     return res;
 }
 
-#endif // FPMATH_H
+#endif /* FPMATH_H */
