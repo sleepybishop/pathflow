@@ -81,9 +81,25 @@ int main(int argc, char **argv) {
         exit(-1);
     }
 
+    pathflow_solver_t solver_type = PATHFLOW_SOLVER_DE;
+    const char *env_solver = getenv("PATHFLOW_SOLVER");
+    if (env_solver != NULL) {
+        if (strcmp(env_solver, "sa") == 0) {
+            solver_type = PATHFLOW_SOLVER_SA;
+        } else if (strcmp(env_solver, "pso") == 0) {
+            solver_type = PATHFLOW_SOLVER_PSO;
+        } else if (strcmp(env_solver, "ga") == 0) {
+            solver_type = PATHFLOW_SOLVER_GA;
+        } else if (strcmp(env_solver, "aco") == 0) {
+            solver_type = PATHFLOW_SOLVER_ACO;
+        } else if (strcmp(env_solver, "ts") == 0) {
+            solver_type = PATHFLOW_SOLVER_TS;
+        }
+    }
+
     fp_t total_time =
         pathflow_optimize(active_N, K, active_paths, FP_FROM_FLOAT(10000.0f),
-                          Ps); // Use a fixed large penalty for DE
+                          Ps, solver_type); // Use a fixed large penalty for DE
 
     for (size_t j = 0; j < active_N; j++) {
         size_t orig = map[j];

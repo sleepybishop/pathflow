@@ -237,7 +237,7 @@ void pathflow_update_state(path_state_t *state, fp_t b, fp_t l, fp_t p,
 }
 
 fp_t pathflow_optimize(size_t N, size_t K, path_t *path, fp_t penalty_weight,
-                       size_t Ps) {
+                       size_t Ps, pathflow_solver_t solver_type) {
     N = (N > MAX_LINKS) ? MAX_LINKS : N;
 
     fp_t c1[MAX_LINKS];
@@ -268,21 +268,28 @@ fp_t pathflow_optimize(size_t N, size_t K, path_t *path, fp_t penalty_weight,
         }
     }
 
-    /* Select solver plugin based on environment variable PATHFLOW_SOLVER */
-    const solver_interface_t *plugin = &de_plugin;
-    const char *env_solver = getenv("PATHFLOW_SOLVER");
-    if (env_solver != NULL) {
-        if (strcmp(env_solver, "sa") == 0) {
-            plugin = &sa_plugin;
-        } else if (strcmp(env_solver, "pso") == 0) {
-            plugin = &pso_plugin;
-        } else if (strcmp(env_solver, "ga") == 0) {
-            plugin = &ga_plugin;
-        } else if (strcmp(env_solver, "aco") == 0) {
-            plugin = &aco_plugin;
-        } else if (strcmp(env_solver, "ts") == 0) {
-            plugin = &ts_plugin;
-        }
+    /* Select solver plugin based on solver_type */
+    const solver_interface_t *plugin;
+    switch (solver_type) {
+    case PATHFLOW_SOLVER_SA:
+        plugin = &sa_plugin;
+        break;
+    case PATHFLOW_SOLVER_PSO:
+        plugin = &pso_plugin;
+        break;
+    case PATHFLOW_SOLVER_GA:
+        plugin = &ga_plugin;
+        break;
+    case PATHFLOW_SOLVER_ACO:
+        plugin = &aco_plugin;
+        break;
+    case PATHFLOW_SOLVER_TS:
+        plugin = &ts_plugin;
+        break;
+    case PATHFLOW_SOLVER_DE:
+    default:
+        plugin = &de_plugin;
+        break;
     }
 
     void *solver = plugin->init(&(solver_settings_t){
