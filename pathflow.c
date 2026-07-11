@@ -268,6 +268,10 @@ fp_t pathflow_optimize(size_t N, size_t K, path_t *path, fp_t penalty_weight,
         }
     }
 
+    if (solver_type == PATHFLOW_SOLVER_GREEDY) {
+        return greedy_solver(N, K, path, c1, c2, link_time);
+    }
+
     /* Select solver plugin based on solver_type */
     const solver_interface_t *plugin;
     switch (solver_type) {

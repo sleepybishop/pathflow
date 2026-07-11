@@ -27,6 +27,7 @@ typedef struct {
 void pathflow_update_state(path_state_t *state, fp_t b, fp_t l, fp_t p,
                            size_t q, fp_t alpha);
 typedef enum {
+    PATHFLOW_SOLVER_GREEDY,
     PATHFLOW_SOLVER_DE,
     PATHFLOW_SOLVER_SA,
     PATHFLOW_SOLVER_PSO,

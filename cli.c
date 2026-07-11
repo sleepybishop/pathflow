@@ -84,7 +84,9 @@ int main(int argc, char **argv) {
     pathflow_solver_t solver_type = PATHFLOW_SOLVER_DE;
     const char *env_solver = getenv("PATHFLOW_SOLVER");
     if (env_solver != NULL) {
-        if (strcmp(env_solver, "sa") == 0) {
+        if (strcmp(env_solver, "greedy") == 0) {
+            solver_type = PATHFLOW_SOLVER_GREEDY;
+        } else if (strcmp(env_solver, "sa") == 0) {
             solver_type = PATHFLOW_SOLVER_SA;
         } else if (strcmp(env_solver, "pso") == 0) {
             solver_type = PATHFLOW_SOLVER_PSO;
