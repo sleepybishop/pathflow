@@ -7,16 +7,17 @@
 #define CLAMP(x, a, b) ((x < (a)) ? (a) : ((x > (b)) ? (b) : (x)))
 
 int main(int argc, char **argv) {
-    float max_p = 0.20f;
-    float max_l = 2.0f;
+    fp_t max_p = FP_FROM_FLOAT(0.20f);
+    fp_t max_l = FP_FROM_FLOAT(2.0f);
     if (argc >= 3) {
-        max_p = atof(argv[1]);
-        max_l = atof(argv[2]);
+        max_p = FP_FROM_FLOAT(atof(argv[1]));
+        max_l = FP_FROM_FLOAT(atof(argv[2]));
     }
 
     path_t path[MAX_LINKS] = {0};
     size_t N = 0, K = 0;
-    float Ps_f = 0.0, deadline = 60.0;
+    float Ps_f = 0.0;
+    fp_t deadline = FP_FROM_FLOAT(60.0f);
 
     FILE *in = fopen("problem.txt", "r");
     if (!in)
@@ -33,7 +34,7 @@ int main(int argc, char **argv) {
     size_t Ps = (size_t)roundf(Ps_f * 100.0f);
     printf("N: %zu, K: %zu, Ps: %.2f\n", N, K, Ps_f);
     path_state_t states[MAX_LINKS] = {0};
-    float alpha = 0.25f;
+    fp_t alpha = FP_FROM_FLOAT(0.25f);
 
     size_t i = 0;
     for (i = 0; i < N; i++) {
@@ -44,7 +45,9 @@ int main(int argc, char **argv) {
             break;
         raw_p = CLAMP(raw_p, 0.0f, 0.99f);
 
-        pathflow_update_state(&states[i], raw_b, raw_l, raw_p, raw_q, alpha);
+        pathflow_update_state(&states[i], FP_FROM_FLOAT(raw_b),
+                              FP_FROM_FLOAT(raw_l), FP_FROM_FLOAT(raw_p), raw_q,
+                              alpha);
 
         path[i].b = states[i].b_ewma;
         path[i].l = states[i].l_ewma;
@@ -61,13 +64,14 @@ int main(int argc, char **argv) {
 
     for (size_t j = 0; j < N; j++) {
         if (path[j].p >= max_p || path[j].l >= max_l) {
-            printf("path[%zu] %f %f %f %zu (DROPPED)\n", j, path[j].b,
-                   path[j].l, path[j].p, path[j].q);
+            printf("path[%zu] %f %f %f %zu (DROPPED)\n", j,
+                   FP_TO_FLOAT(path[j].b), FP_TO_FLOAT(path[j].l),
+                   FP_TO_FLOAT(path[j].p), path[j].q);
         } else {
             active_paths[active_N] = path[j];
             map[active_N] = j;
-            printf("path[%zu] %f %f %f %zu\n", j, path[j].b, path[j].l,
-                   path[j].p, path[j].q);
+            printf("path[%zu] %f %f %f %zu\n", j, FP_TO_FLOAT(path[j].b),
+                   FP_TO_FLOAT(path[j].l), FP_TO_FLOAT(path[j].p), path[j].q);
             active_N++;
         }
     }
@@ -77,8 +81,8 @@ int main(int argc, char **argv) {
         exit(-1);
     }
 
-    float total_time =
-        pathflow_optimize(active_N, K, active_paths, 10000.0f,
+    fp_t total_time =
+        pathflow_optimize(active_N, K, active_paths, FP_FROM_FLOAT(10000.0f),
                           Ps); // Use a fixed large penalty for DE
 
     for (size_t j = 0; j < active_N; j++) {
@@ -86,11 +90,11 @@ int main(int argc, char **argv) {
         path[orig] = active_paths[j];
     }
 
-    printf("estimated transfer time: %.2fs\n", total_time);
+    printf("estimated transfer time: %.2fs\n", FP_TO_FLOAT(total_time));
     if (total_time > deadline) {
         printf(
             "WARNING: Estimated transfer time exceeds the deadline of %.2fs!\n",
-            deadline);
+            FP_TO_FLOAT(deadline));
     }
 
     size_t alloc = 0, extra = 0;
@@ -101,8 +105,9 @@ int main(int argc, char **argv) {
         extra += path[j].x;
 
         printf("m[%2zu]: %5zu + %5zu  [ %6.0f | %6.3f | %6.3f ] -> %8.3f\n", j,
-               (size_t)path[j].m, path[j].x - path[j].m, path[j].b, path[j].l,
-               path[j].p, path[j].t);
+               (size_t)path[j].m, path[j].x - path[j].m, FP_TO_FLOAT(path[j].b),
+               FP_TO_FLOAT(path[j].l), FP_TO_FLOAT(path[j].p),
+               FP_TO_FLOAT(path[j].t));
     }
     printf("m[xx]: %5zu   %5zu\n", alloc, extra);
 

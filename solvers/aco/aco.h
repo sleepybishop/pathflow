@@ -1,10 +1,10 @@
 /* Copyright 2026 Antigravity ACO Solver
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
+ * Licensed under the Apache License, Version FP_FROM_FLOAT(2.0) (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-FP_FROM_FLOAT(2.0)
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,9 +30,9 @@
 typedef struct aco_settings {
     int dimension_count;  /* Number of dimensions in the optimisation problem */
     int population_count; /* Number of agents in the population */
-    float lower_bound;    /* Lower bound of the search space (same in all
+    fp_t lower_bound;    /* Lower bound of the search space (same in all
                              dimensions) */
-    float upper_bound;    /* Upper bound of the search space (same in all
+    fp_t upper_bound;    /* Upper bound of the search space (same in all
                              dimensions) */
     int random_seed; /* Seed for the optimiser's pseudo random number generator
                       */
@@ -41,44 +41,44 @@ typedef struct aco_settings {
 typedef struct aco_optimiser {
     int dimension_count;  /* Number of dimensions in the optimisation problem */
     int population_count; /* Number of agents in the colony */
-    float lower_bound;    /* Lower bound of the search space (same in all
+    fp_t lower_bound;    /* Lower bound of the search space (same in all
                              dimensions) */
-    float upper_bound;    /* Upper bound of the search space (same in all
+    fp_t upper_bound;    /* Upper bound of the search space (same in all
                              dimensions) */
     int best; /* Index of the ant with the lowest fitness in the current
                  generation */
 
-    float *fitnesses;      /* Per-ant fitness (population_count) */
-    float *candidates;     /* Per-ant candidate vectors (population_count *
+    fp_t *fitnesses;      /* Per-ant fitness (population_count) */
+    fp_t *candidates;     /* Per-ant candidate vectors (population_count *
                               dimension_count) */
-    float *pheromones;     /* Pheromone matrix ((K + 1) * dimension_count) */
-    float *best_candidate; /* Global best candidate vector (dimension_count) */
-    float best_fitness;    /* Global best fitness */
+    fp_t *pheromones;     /* Pheromone matrix ((K + 1) * dimension_count) */
+    fp_t *best_candidate; /* Global best candidate vector (dimension_count) */
+    fp_t best_fitness;    /* Global best fitness */
     int evaluated_count;   /* Number of ants evaluated in total */
     uint32_t rng[4];       /* PRNG state */
 } aco_optimiser;
 
 #define ACO_MEMORY_REQUIRED(dimensions, population, upper_bound) ( \
     sizeof(aco_optimiser) +                                        \
-    (sizeof(float) * (population)) +                               \
-    (sizeof(float) * (dimensions) * (population)) +                \
-    (sizeof(float) * ((int)(upper_bound) + 1) * (dimensions)) +    \
-    (sizeof(float) * (dimensions))                                 \
+    (sizeof(fp_t) * (population)) +                               \
+    (sizeof(fp_t) * (dimensions) * (population)) +                \
+    (sizeof(fp_t) * ((int)(upper_bound) + 1) * (dimensions)) +    \
+    (sizeof(fp_t) * (dimensions))                                 \
 )
 
 /* Initialise the optimiser. Returns NULL if any allocation failed. */
 aco_optimiser *aco_init(aco_settings *settings);
 
 /* Ask the optimiser to generate a candidate solution for evaluation */
-int aco_ask(aco_optimiser *opt, float *out_candidate);
+int aco_ask(aco_optimiser *opt, fp_t *out_candidate);
 
 /* Tell the optimiser the fitness of a candidate solution */
-void aco_tell(aco_optimiser *opt, int id, const float *candidate,
-              float fitness);
+void aco_tell(aco_optimiser *opt, int id, const fp_t *candidate,
+              fp_t fitness);
 
 /* Query the optimiser for the current best fitness and corresponding candidate
  * solution. */
-float aco_best(aco_optimiser *opt, float *out_candidate);
+fp_t aco_best(aco_optimiser *opt, fp_t *out_candidate);
 
 /* Free the optimiser and its memory pools */
 void aco_deinit(aco_optimiser *opt);
@@ -89,7 +89,7 @@ void aco_deinit(aco_optimiser *opt);
 
 #ifdef ANT_COLONY_OPTIMISATION_IMPL
 
-#include <math.h>
+#include "fpmath.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -115,34 +115,31 @@ static uint32_t aco__next(uint32_t s[4]) {
     return result;
 }
 
-static float aco__next_float(uint32_t s[4]) {
-    /* Only the upper 28 bits are high entropy enough */
-    const uint32_t max_draw = (~(uint32_t)0) >> 4;
-    const float divisor = 1.0f / (float)max_draw;
-    return (float)(aco__next(s) >> 4) * divisor;
+static inline fp_t aco__next_fp(uint32_t s[4]) {
+    return (fp_t)(aco__next(s) % (uint32_t)FP_ONE);
 }
 
 aco_optimiser *aco_init(aco_settings *settings) {
     const int dimension_count = settings->dimension_count;
     const int population_count = settings->population_count;
-    const float lower_bound = settings->lower_bound;
-    const float upper_bound = settings->upper_bound;
+    const fp_t lower_bound = settings->lower_bound;
+    const fp_t upper_bound = settings->upper_bound;
     const int random_seed = settings->random_seed;
     const int K = (int)upper_bound;
-    const float tau_max = 10.0f;
-    float range;
+    const fp_t tau_max = FP_FROM_FLOAT(10.0f);
+    fp_t range;
     uint32_t rng[4];
     uint32_t sm_state;
     int i;
 
     /* Allocate the optimiser and its memory pools */
     aco_optimiser *opt = (aco_optimiser *)ACO_ALLOC(sizeof(aco_optimiser));
-    float *fitnesses = (float *)ACO_ALLOC(sizeof(float) * population_count);
-    float *candidates =
-        (float *)ACO_ALLOC(sizeof(float) * dimension_count * population_count);
-    float *pheromones =
-        (float *)ACO_ALLOC(sizeof(float) * (K + 1) * dimension_count);
-    float *best_candidate = (float *)ACO_ALLOC(sizeof(float) * dimension_count);
+    fp_t *fitnesses = (fp_t *)ACO_ALLOC(sizeof(fp_t) * population_count);
+    fp_t *candidates =
+        (fp_t *)ACO_ALLOC(sizeof(fp_t) * dimension_count * population_count);
+    fp_t *pheromones =
+        (fp_t *)ACO_ALLOC(sizeof(fp_t) * (K + 1) * dimension_count);
+    fp_t *best_candidate = (fp_t *)ACO_ALLOC(sizeof(fp_t) * dimension_count);
 
     if (!opt || !fitnesses || !candidates || !pheromones || !best_candidate) {
         ACO_FREE(opt);
@@ -165,7 +162,7 @@ aco_optimiser *aco_init(aco_settings *settings) {
     range = upper_bound - lower_bound;
 
     for (i = 0; i < population_count; i++) {
-        fitnesses[i] = INFINITY;
+        fitnesses[i] = FP_MAX;
     }
 
     /* Initialise pheromones to tau_max */
@@ -178,21 +175,21 @@ aco_optimiser *aco_init(aco_settings *settings) {
         int d;
         for (d = 0; d < dimension_count; d++) {
             candidates[i * dimension_count + d] =
-                lower_bound + aco__next_float(rng) * range;
+                lower_bound + FP_MUL(aco__next_fp(rng), range);
         }
 
         /* Project to sum to K (which is upper_bound) */
         if (dimension_count > 1) {
             int iter;
             for (iter = 0; iter < 3; iter++) {
-                float sum = 0.0f;
+                fp_t sum = FP_FROM_FLOAT(0.0f);
                 for (d = 0; d < dimension_count; d++) {
                     sum += candidates[i * dimension_count + d];
                 }
-                float error = sum - upper_bound;
+                fp_t error = sum - upper_bound;
                 for (d = 0; d < dimension_count; d++) {
                     candidates[i * dimension_count + d] -=
-                        error / (float)dimension_count;
+                        FP_DIV(error, (fp_t)dimension_count);
                     if (candidates[i * dimension_count + d] < lower_bound) {
                         candidates[i * dimension_count + d] = lower_bound;
                     }
@@ -216,7 +213,7 @@ aco_optimiser *aco_init(aco_settings *settings) {
         .candidates = candidates,
         .pheromones = pheromones,
         .best_candidate = best_candidate,
-        .best_fitness = INFINITY,
+        .best_fitness = FP_MAX,
         .evaluated_count = 0,
         .rng = {rng[0], rng[1], rng[2], rng[3]},
     };
@@ -224,29 +221,29 @@ aco_optimiser *aco_init(aco_settings *settings) {
     return opt;
 }
 
-int aco_ask(aco_optimiser *opt, float *out_candidate) {
+int aco_ask(aco_optimiser *opt, fp_t *out_candidate) {
     const int population_count = opt->population_count;
     const int dimension_count = opt->dimension_count;
-    const float upper_bound = opt->upper_bound;
+    const fp_t upper_bound = opt->upper_bound;
 
     /* In the initialization phase, return initial random candidates one by one
      */
-    if (opt->best_fitness == INFINITY &&
+    if (opt->best_fitness == FP_MAX &&
         opt->evaluated_count < population_count) {
         memcpy(out_candidate,
                &opt->candidates[opt->evaluated_count * dimension_count],
-               sizeof(float) * dimension_count);
+               sizeof(fp_t) * dimension_count);
         return opt->evaluated_count;
     }
 
     /* Ant constructs a solution step-by-step */
     int K = (int)upper_bound;
     int m[16] = {0};
-    float probs[16];
+    fp_t probs[16];
     int k;
 
     for (k = 0; k < K; k++) {
-        float sum = 0.0f;
+        fp_t sum = FP_FROM_FLOAT(0.0f);
         int d;
         for (d = 0; d < dimension_count; d++) {
             int current_m = m[d];
@@ -257,8 +254,8 @@ int aco_ask(aco_optimiser *opt, float *out_candidate) {
         }
 
         /* Choose a link based on probabilities */
-        float r = aco__next_float(opt->rng) * sum;
-        float accumulator = 0.0f;
+        fp_t r = FP_MUL(aco__next_fp(opt->rng), sum);
+        fp_t accumulator = FP_FROM_FLOAT(0.0f);
         int chosen_d = dimension_count - 1;
         for (d = 0; d < dimension_count; d++) {
             accumulator += probs[d];
@@ -273,21 +270,21 @@ int aco_ask(aco_optimiser *opt, float *out_candidate) {
     /* Write to out_candidate */
     int d;
     for (d = 0; d < dimension_count; d++) {
-        out_candidate[d] = (float)m[d];
+        out_candidate[d] = (fp_t)m[d];
     }
 
     return opt->evaluated_count % population_count;
 }
 
-void aco_tell(aco_optimiser *opt, int id, const float *candidate,
-              float fitness) {
+void aco_tell(aco_optimiser *opt, int id, const fp_t *candidate,
+              fp_t fitness) {
     const int dimension_count = opt->dimension_count;
     const int population_count = opt->population_count;
     const int K = (int)opt->upper_bound;
 
     /* Store the ant's solution and fitness */
     memcpy(&opt->candidates[id * dimension_count], candidate,
-           sizeof(float) * dimension_count);
+           sizeof(fp_t) * dimension_count);
     opt->fitnesses[id] = fitness;
 
     /* Update generation best index */
@@ -298,8 +295,8 @@ void aco_tell(aco_optimiser *opt, int id, const float *candidate,
     }
 
     /* Update global best */
-    if (opt->best_fitness == INFINITY || fitness < opt->best_fitness) {
-        memcpy(opt->best_candidate, candidate, sizeof(float) * dimension_count);
+    if (opt->best_fitness == FP_MAX || fitness < opt->best_fitness) {
+        memcpy(opt->best_candidate, candidate, sizeof(fp_t) * dimension_count);
         opt->best_fitness = fitness;
     }
 
@@ -308,26 +305,26 @@ void aco_tell(aco_optimiser *opt, int id, const float *candidate,
     /* Once all ants in the colony have been evaluated, we complete a generation
      */
     if (opt->evaluated_count % population_count == 0) {
-        const float rho = 0.10f;
-        const float tau_min = 0.01f;
-        const float tau_max = 10.0f;
-        float delta_tau = 1.0f;
+        const fp_t rho = FP_FROM_FLOAT(0.10f);
+        const fp_t tau_min = FP_FROM_FLOAT(0.01f);
+        const fp_t tau_max = FP_FROM_FLOAT(10.0f);
+        fp_t delta_tau = FP_FROM_FLOAT(1.0f);
         int i, j, d;
 
         /* Evaporate pheromones (10%) and clamp */
         for (i = 0; i < (K + 1) * dimension_count; i++) {
-            opt->pheromones[i] *= (1.0f - rho);
+            opt->pheromones[i] = FP_MUL(opt->pheromones[i], (FP_FROM_FLOAT(1.0f) - rho));
             if (opt->pheromones[i] < tau_min)
                 opt->pheromones[i] = tau_min;
         }
 
         /* Deposit pheromones on the paths chosen by the best ant in this
          * generation */
-        const float *best_candidate =
+        const fp_t *best_candidate =
             &opt->candidates[opt->best * dimension_count];
-        float best_fitness = opt->fitnesses[opt->best];
-        if (best_fitness > 0.0f) {
-            delta_tau = 10.0f / best_fitness;
+        fp_t best_fitness = opt->fitnesses[opt->best];
+        if (best_fitness > FP_FROM_FLOAT(0.0f)) {
+            delta_tau = FP_DIV(FP_FROM_FLOAT(10.0f), best_fitness);
         }
 
         for (d = 0; d < dimension_count; d++) {
@@ -344,18 +341,18 @@ void aco_tell(aco_optimiser *opt, int id, const float *candidate,
     }
 }
 
-float aco_best(aco_optimiser *opt, float *out_candidate) {
+fp_t aco_best(aco_optimiser *opt, fp_t *out_candidate) {
     const int dimension_count = opt->dimension_count;
-    const int candidate_bytes = sizeof(float) * dimension_count;
+    const int candidate_bytes = sizeof(fp_t) * dimension_count;
 
-    if (out_candidate && opt->best_fitness != INFINITY) {
+    if (out_candidate && opt->best_fitness != FP_MAX) {
         memcpy(out_candidate, opt->best_candidate, candidate_bytes);
     } else if (out_candidate) {
         memcpy(out_candidate, &opt->candidates[opt->best * dimension_count],
                candidate_bytes);
     }
 
-    return opt->best_fitness == INFINITY ? opt->fitnesses[opt->best]
+    return opt->best_fitness == FP_MAX ? opt->fitnesses[opt->best]
                                          : opt->best_fitness;
 }
 

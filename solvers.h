@@ -22,16 +22,16 @@
 typedef struct {
     int dimension_count;
     int population_count;
-    float lower_bound;
-    float upper_bound;
+    fp_t lower_bound;
+    fp_t upper_bound;
     int random_seed;
 } solver_settings_t;
 
 typedef struct {
     void *(*init)(const solver_settings_t *settings);
-    int (*ask)(void *opt, float *out_candidate);
-    void (*tell)(void *opt, int id, const float *candidate, float fitness);
-    float (*best)(void *opt, float *out_candidate);
+    int (*ask)(void *opt, fp_t *out_candidate);
+    void (*tell)(void *opt, int id, const fp_t *candidate, fp_t fitness);
+    fp_t (*best)(void *opt, fp_t *out_candidate);
     void (*deinit)(void *opt);
 } solver_interface_t;
 
@@ -41,14 +41,14 @@ typedef struct {
             s->dimension_count, s->population_count, s->lower_bound,           \
             s->upper_bound, s->random_seed});                                  \
     }                                                                          \
-    static int name##_ask_wrap(void *opt, float *out) {                        \
+    static int name##_ask_wrap(void *opt, fp_t *out) {                         \
         return name##_ask((name##_optimiser *)opt, out);                       \
     }                                                                          \
-    static void name##_tell_wrap(void *opt, int id, const float *candidate,    \
-                                 float fitness) {                              \
+    static void name##_tell_wrap(void *opt, int id, const fp_t *candidate,     \
+                                 fp_t fitness) {                               \
         name##_tell((name##_optimiser *)opt, id, candidate, fitness);          \
     }                                                                          \
-    static float name##_best_wrap(void *opt, float *out) {                     \
+    static fp_t name##_best_wrap(void *opt, fp_t *out) {                       \
         return name##_best((name##_optimiser *)opt, out);                      \
     }                                                                          \
     static void name##_deinit_wrap(void *opt) {                                \

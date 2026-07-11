@@ -1,10 +1,10 @@
 /* Copyright 2026 Antigravity TS Solver
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
+ * Licensed under the Apache License, Version FP_FROM_FLOAT(2.0) (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-FP_FROM_FLOAT(2.0)
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,9 +30,9 @@
 typedef struct ts_settings {
     int dimension_count;  /* Number of dimensions in the optimisation problem */
     int population_count; /* Number of agents in the population */
-    float lower_bound;    /* Lower bound of the search space (same in all
+    fp_t lower_bound;    /* Lower bound of the search space (same in all
                              dimensions) */
-    float upper_bound;    /* Upper bound of the search space (same in all
+    fp_t upper_bound;    /* Upper bound of the search space (same in all
                              dimensions) */
     int random_seed; /* Seed for the optimiser's pseudo random number generator
                       */
@@ -41,49 +41,49 @@ typedef struct ts_settings {
 typedef struct ts_optimiser {
     int dimension_count;  /* Number of dimensions in the optimisation problem */
     int population_count; /* Number of agents in the population */
-    float lower_bound;    /* Lower bound of the search space (same in all
+    fp_t lower_bound;    /* Lower bound of the search space (same in all
                              dimensions) */
-    float upper_bound;    /* Upper bound of the search space (same in all
+    fp_t upper_bound;    /* Upper bound of the search space (same in all
                              dimensions) */
     int best;             /* Index of the agent with the lowest fitness */
 
-    float *fitnesses;  /* Per-agent fitness */
-    float *candidates; /* Per-agent candidate vectors (population_count *
+    fp_t *fitnesses;  /* Per-agent fitness */
+    fp_t *candidates; /* Per-agent candidate vectors (population_count *
                           dimension_count) */
     int *tabu_list;    /* Tabu tenure matrix (population_count * N * N) */
     int *step_counts;  /* Step counter for each agent */
     int *consecutive_rejects; /* Consecutive rejected moves for each agent */
     int *proposed_source;     /* Proposed source index for each agent in ask */
     int *proposed_dest; /* Proposed destination index for each agent in ask */
-    float *best_candidate; /* Global best candidate vector (dimension_count) */
-    float best_fitness;    /* Global best fitness */
+    fp_t *best_candidate; /* Global best candidate vector (dimension_count) */
+    fp_t best_fitness;    /* Global best fitness */
     uint32_t rng[4];       /* PRNG state */
 } ts_optimiser;
 
 #define TS_MEMORY_REQUIRED(dimensions, population) ( \
     sizeof(ts_optimiser) +                           \
-    (sizeof(float) * (population)) +                 \
-    (sizeof(float) * (dimensions) * (population)) +  \
+    (sizeof(fp_t) * (population)) +                 \
+    (sizeof(fp_t) * (dimensions) * (population)) +  \
     (sizeof(int) * (population) * (dimensions) * (dimensions)) + \
     (sizeof(int) * (population)) +                   \
     (sizeof(int) * (population)) +                   \
     (sizeof(int) * (population)) +                   \
     (sizeof(int) * (population)) +                   \
-    (sizeof(float) * (dimensions))                   \
+    (sizeof(fp_t) * (dimensions))                   \
 )
 
 /* Initialise the optimiser. Returns NULL if any allocation failed. */
 ts_optimiser *ts_init(ts_settings *settings);
 
 /* Ask the optimiser to generate a candidate solution for evaluation */
-int ts_ask(ts_optimiser *opt, float *out_candidate);
+int ts_ask(ts_optimiser *opt, fp_t *out_candidate);
 
 /* Tell the optimiser the fitness of a candidate solution */
-void ts_tell(ts_optimiser *opt, int id, const float *candidate, float fitness);
+void ts_tell(ts_optimiser *opt, int id, const fp_t *candidate, fp_t fitness);
 
 /* Query the optimiser for the current best fitness and corresponding candidate
  * solution. */
-float ts_best(ts_optimiser *opt, float *out_candidate);
+fp_t ts_best(ts_optimiser *opt, fp_t *out_candidate);
 
 /* Free the optimiser and its memory pools */
 void ts_deinit(ts_optimiser *opt);
@@ -94,7 +94,7 @@ void ts_deinit(ts_optimiser *opt);
 
 #ifdef TABU_SEARCH_IMPL
 
-#include <math.h>
+#include "fpmath.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -120,36 +120,33 @@ static uint32_t ts__next(uint32_t s[4]) {
     return result;
 }
 
-static float ts__next_float(uint32_t s[4]) {
-    /* Only the upper 28 bits are high entropy enough */
-    const uint32_t max_draw = (~(uint32_t)0) >> 4;
-    const float divisor = 1.0f / (float)max_draw;
-    return (float)(ts__next(s) >> 4) * divisor;
+static inline fp_t ts__next_fp(uint32_t s[4]) {
+    return (fp_t)(ts__next(s) % (uint32_t)FP_ONE);
 }
 
 ts_optimiser *ts_init(ts_settings *settings) {
     const int dimension_count = settings->dimension_count;
     const int population_count = settings->population_count;
-    const float lower_bound = settings->lower_bound;
-    const float upper_bound = settings->upper_bound;
+    const fp_t lower_bound = settings->lower_bound;
+    const fp_t upper_bound = settings->upper_bound;
     const int random_seed = settings->random_seed;
-    float range;
+    fp_t range;
     uint32_t rng[4];
     uint32_t sm_state;
     int i;
 
     /* Allocate the optimiser and its memory pools */
     ts_optimiser *opt = (ts_optimiser *)TS_ALLOC(sizeof(ts_optimiser));
-    float *fitnesses = (float *)TS_ALLOC(sizeof(float) * population_count);
-    float *candidates =
-        (float *)TS_ALLOC(sizeof(float) * dimension_count * population_count);
+    fp_t *fitnesses = (fp_t *)TS_ALLOC(sizeof(fp_t) * population_count);
+    fp_t *candidates =
+        (fp_t *)TS_ALLOC(sizeof(fp_t) * dimension_count * population_count);
     int *tabu_list = (int *)TS_ALLOC(sizeof(int) * population_count *
                                      dimension_count * dimension_count);
     int *step_counts = (int *)TS_ALLOC(sizeof(int) * population_count);
     int *consecutive_rejects = (int *)TS_ALLOC(sizeof(int) * population_count);
     int *proposed_source = (int *)TS_ALLOC(sizeof(int) * population_count);
     int *proposed_dest = (int *)TS_ALLOC(sizeof(int) * population_count);
-    float *best_candidate = (float *)TS_ALLOC(sizeof(float) * dimension_count);
+    fp_t *best_candidate = (fp_t *)TS_ALLOC(sizeof(fp_t) * dimension_count);
 
     if (!opt || !fitnesses || !candidates || !tabu_list || !step_counts ||
         !consecutive_rejects || !proposed_source || !proposed_dest ||
@@ -178,7 +175,7 @@ ts_optimiser *ts_init(ts_settings *settings) {
     range = upper_bound - lower_bound;
 
     for (i = 0; i < population_count; i++) {
-        fitnesses[i] = INFINITY;
+        fitnesses[i] = FP_MAX;
         step_counts[i] = 0;
         consecutive_rejects[i] = 0;
         proposed_source[i] = -1;
@@ -193,21 +190,21 @@ ts_optimiser *ts_init(ts_settings *settings) {
         int d;
         for (d = 0; d < dimension_count; d++) {
             candidates[i * dimension_count + d] =
-                lower_bound + ts__next_float(rng) * range;
+                lower_bound + FP_MUL(ts__next_fp(rng), range);
         }
 
         /* Project to sum to K (which is upper_bound) */
         if (dimension_count > 1) {
             int iter;
             for (iter = 0; iter < 3; iter++) {
-                float sum = 0.0f;
+                fp_t sum = FP_FROM_FLOAT(0.0f);
                 for (d = 0; d < dimension_count; d++) {
                     sum += candidates[i * dimension_count + d];
                 }
-                float error = sum - upper_bound;
+                fp_t error = sum - upper_bound;
                 for (d = 0; d < dimension_count; d++) {
                     candidates[i * dimension_count + d] -=
-                        error / (float)dimension_count;
+                        FP_DIV(error, (fp_t)dimension_count);
                     if (candidates[i * dimension_count + d] < lower_bound) {
                         candidates[i * dimension_count + d] = lower_bound;
                     }
@@ -235,30 +232,30 @@ ts_optimiser *ts_init(ts_settings *settings) {
         .proposed_source = proposed_source,
         .proposed_dest = proposed_dest,
         .best_candidate = best_candidate,
-        .best_fitness = INFINITY,
+        .best_fitness = FP_MAX,
         .rng = {rng[0], rng[1], rng[2], rng[3]},
     };
 
     return opt;
 }
 
-int ts_ask(ts_optimiser *opt, float *out_candidate) {
+int ts_ask(ts_optimiser *opt, fp_t *out_candidate) {
     const int population_count = opt->population_count;
     const int dimension_count = opt->dimension_count;
-    const float lower_bound = opt->lower_bound;
-    const float upper_bound = opt->upper_bound;
+    const fp_t lower_bound = opt->lower_bound;
+    const fp_t upper_bound = opt->upper_bound;
 
     int id = ts__next(opt->rng) % population_count;
-    const float *x = &opt->candidates[id * dimension_count];
+    const fp_t *x = &opt->candidates[id * dimension_count];
 
     /* In the initialization phase, return initial random candidates one by one
      */
-    if (opt->best_fitness == INFINITY && opt->fitnesses[id] == INFINITY) {
-        memcpy(out_candidate, x, sizeof(float) * dimension_count);
+    if (opt->best_fitness == FP_MAX && opt->fitnesses[id] == FP_MAX) {
+        memcpy(out_candidate, x, sizeof(fp_t) * dimension_count);
         return id;
     }
 
-    memcpy(out_candidate, x, sizeof(float) * dimension_count);
+    memcpy(out_candidate, x, sizeof(fp_t) * dimension_count);
 
     if (dimension_count <= 1) {
         return id;
@@ -274,7 +271,7 @@ int ts_ask(ts_optimiser *opt, float *out_candidate) {
             continue;
 
         /* Source must have at least 1 packet to transfer */
-        if (x[d1] < 1.0f)
+        if (x[d1] < FP_FROM_FLOAT(1.0f))
             continue;
 
         /* Check tabu status of move (d1 -> d2) */
@@ -284,15 +281,15 @@ int ts_ask(ts_optimiser *opt, float *out_candidate) {
         if (tabu_expiry <= opt->step_counts[id]) {
             /* Not tabu */
             break;
-        } else if (ts__next_float(opt->rng) < 0.10f) {
+        } else if (ts__next_fp(opt->rng) < FP_FROM_FLOAT(0.10f)) {
             /* Aspiration criterion: allow tabu move occasionally */
             break;
         }
     }
 
-    if (d1 != -1 && d2 != -1 && d1 != d2 && x[d1] >= 1.0f) {
-        out_candidate[d1] = x[d1] - 1.0f;
-        out_candidate[d2] = x[d2] + 1.0f;
+    if (d1 != -1 && d2 != -1 && d1 != d2 && x[d1] >= FP_FROM_FLOAT(1.0f)) {
+        out_candidate[d1] = x[d1] - FP_FROM_FLOAT(1.0f);
+        out_candidate[d2] = x[d2] + FP_FROM_FLOAT(1.0f);
 
         /* Project and clamp to keep it exact */
         int d;
@@ -313,12 +310,12 @@ int ts_ask(ts_optimiser *opt, float *out_candidate) {
     return id;
 }
 
-void ts_tell(ts_optimiser *opt, int id, const float *candidate, float fitness) {
+void ts_tell(ts_optimiser *opt, int id, const fp_t *candidate, fp_t fitness) {
     const int dimension_count = opt->dimension_count;
     const int TabuTenure = 8;
     int accept = 0;
 
-    if (opt->fitnesses[id] == INFINITY) {
+    if (opt->fitnesses[id] == FP_MAX) {
         accept = 1;
     } else if (fitness < opt->fitnesses[id]) {
         accept = 1;
@@ -335,7 +332,7 @@ void ts_tell(ts_optimiser *opt, int id, const float *candidate, float fitness) {
 
     if (accept) {
         memcpy(&opt->candidates[id * dimension_count], candidate,
-               sizeof(float) * dimension_count);
+               sizeof(fp_t) * dimension_count);
         opt->fitnesses[id] = fitness;
         opt->best = (fitness < opt->fitnesses[opt->best]) ? id : opt->best;
 
@@ -350,26 +347,26 @@ void ts_tell(ts_optimiser *opt, int id, const float *candidate, float fitness) {
     }
 
     /* Update global best */
-    if (opt->best_fitness == INFINITY || fitness < opt->best_fitness) {
-        memcpy(opt->best_candidate, candidate, sizeof(float) * dimension_count);
+    if (opt->best_fitness == FP_MAX || fitness < opt->best_fitness) {
+        memcpy(opt->best_candidate, candidate, sizeof(fp_t) * dimension_count);
         opt->best_fitness = fitness;
     }
 
     opt->step_counts[id]++;
 }
 
-float ts_best(ts_optimiser *opt, float *out_candidate) {
+fp_t ts_best(ts_optimiser *opt, fp_t *out_candidate) {
     const int dimension_count = opt->dimension_count;
-    const int candidate_bytes = sizeof(float) * dimension_count;
+    const int candidate_bytes = sizeof(fp_t) * dimension_count;
 
-    if (out_candidate && opt->best_fitness != INFINITY) {
+    if (out_candidate && opt->best_fitness != FP_MAX) {
         memcpy(out_candidate, opt->best_candidate, candidate_bytes);
     } else if (out_candidate) {
         memcpy(out_candidate, &opt->candidates[opt->best * dimension_count],
                candidate_bytes);
     }
 
-    return opt->best_fitness == INFINITY ? opt->fitnesses[opt->best]
+    return opt->best_fitness == FP_MAX ? opt->fitnesses[opt->best]
                                          : opt->best_fitness;
 }
 

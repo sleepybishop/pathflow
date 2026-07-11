@@ -1,10 +1,10 @@
 /* Copyright 2026 Antigravity GA Solver
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
+ * Licensed under the Apache License, Version FP_FROM_FLOAT(2.0) (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-FP_FROM_FLOAT(2.0)
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,9 +30,9 @@
 typedef struct ga_settings {
     int dimension_count;  /* Number of dimensions in the optimisation problem */
     int population_count; /* Number of agents in the population */
-    float lower_bound;    /* Lower bound of the search space (same in all
+    fp_t lower_bound;    /* Lower bound of the search space (same in all
                              dimensions) */
-    float upper_bound;    /* Upper bound of the search space (same in all
+    fp_t upper_bound;    /* Upper bound of the search space (same in all
                              dimensions) */
     int random_seed; /* Seed for the optimiser's pseudo random number generator
                       */
@@ -41,14 +41,14 @@ typedef struct ga_settings {
 typedef struct ga_optimiser {
     int dimension_count;  /* Number of dimensions in the optimisation problem */
     int population_count; /* Number of agents in the population */
-    float lower_bound;    /* Lower bound of the search space (same in all
+    fp_t lower_bound;    /* Lower bound of the search space (same in all
                              dimensions) */
-    float upper_bound;    /* Upper bound of the search space (same in all
+    fp_t upper_bound;    /* Upper bound of the search space (same in all
                              dimensions) */
     int best;             /* Index of the agent with the lowest fitness */
 
-    float *fitnesses;  /* Per-agent fitness */
-    float *candidates; /* Per-agent candidate vectors (population_count *
+    fp_t *fitnesses;  /* Per-agent fitness */
+    fp_t *candidates; /* Per-agent candidate vectors (population_count *
                           dimension_count) */
     int total_steps;   /* Global step counter */
     uint32_t rng[4];   /* PRNG state */
@@ -56,22 +56,22 @@ typedef struct ga_optimiser {
 
 #define GA_MEMORY_REQUIRED(dimensions, population) ( \
     sizeof(ga_optimiser) +                           \
-    (sizeof(float) * (population)) +                 \
-    (sizeof(float) * (dimensions) * (population))    \
+    (sizeof(fp_t) * (population)) +                 \
+    (sizeof(fp_t) * (dimensions) * (population))    \
 )
 
 /* Initialise the optimiser. Returns NULL if any allocation failed. */
 ga_optimiser *ga_init(ga_settings *settings);
 
 /* Ask the optimiser to generate a candidate solution for evaluation */
-int ga_ask(ga_optimiser *opt, float *out_candidate);
+int ga_ask(ga_optimiser *opt, fp_t *out_candidate);
 
 /* Tell the optimiser the fitness of a candidate solution */
-void ga_tell(ga_optimiser *opt, int id, const float *candidate, float fitness);
+void ga_tell(ga_optimiser *opt, int id, const fp_t *candidate, fp_t fitness);
 
 /* Query the optimiser for the current best fitness and corresponding candidate
  * solution. */
-float ga_best(ga_optimiser *opt, float *out_candidate);
+fp_t ga_best(ga_optimiser *opt, fp_t *out_candidate);
 
 /* Free the optimiser and its memory pools */
 void ga_deinit(ga_optimiser *opt);
@@ -82,7 +82,7 @@ void ga_deinit(ga_optimiser *opt);
 
 #ifdef GENETIC_ALGORITHM_IMPL
 
-#include <math.h>
+#include "fpmath.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -108,29 +108,26 @@ static uint32_t ga__next(uint32_t s[4]) {
     return result;
 }
 
-static float ga__next_float(uint32_t s[4]) {
-    /* Only the upper 28 bits are high entropy enough */
-    const uint32_t max_draw = (~(uint32_t)0) >> 4;
-    const float divisor = 1.0f / (float)max_draw;
-    return (float)(ga__next(s) >> 4) * divisor;
+static inline fp_t ga__next_fp(uint32_t s[4]) {
+    return (fp_t)(ga__next(s) % (uint32_t)FP_ONE);
 }
 
 ga_optimiser *ga_init(ga_settings *settings) {
     const int dimension_count = settings->dimension_count;
     const int population_count = settings->population_count;
-    const float lower_bound = settings->lower_bound;
-    const float upper_bound = settings->upper_bound;
+    const fp_t lower_bound = settings->lower_bound;
+    const fp_t upper_bound = settings->upper_bound;
     const int random_seed = settings->random_seed;
-    float range;
+    fp_t range;
     uint32_t rng[4];
     uint32_t sm_state;
     int i;
 
     /* Allocate the optimiser and its memory pools */
     ga_optimiser *opt = (ga_optimiser *)GA_ALLOC(sizeof(ga_optimiser));
-    float *fitnesses = (float *)GA_ALLOC(sizeof(float) * population_count);
-    float *candidates =
-        (float *)GA_ALLOC(sizeof(float) * dimension_count * population_count);
+    fp_t *fitnesses = (fp_t *)GA_ALLOC(sizeof(fp_t) * population_count);
+    fp_t *candidates =
+        (fp_t *)GA_ALLOC(sizeof(fp_t) * dimension_count * population_count);
 
     if (!opt || !fitnesses || !candidates) {
         GA_FREE(opt);
@@ -151,7 +148,7 @@ ga_optimiser *ga_init(ga_settings *settings) {
     range = upper_bound - lower_bound;
 
     for (i = 0; i < population_count; i++) {
-        fitnesses[i] = INFINITY;
+        fitnesses[i] = FP_MAX;
     }
 
     /* Initialise candidates randomly and project to hyperplane */
@@ -159,21 +156,21 @@ ga_optimiser *ga_init(ga_settings *settings) {
         int d;
         for (d = 0; d < dimension_count; d++) {
             candidates[i * dimension_count + d] =
-                lower_bound + ga__next_float(rng) * range;
+                lower_bound + FP_MUL(ga__next_fp(rng), range);
         }
 
         /* Project to sum to K (which is upper_bound) */
         if (dimension_count > 1) {
             int iter;
             for (iter = 0; iter < 3; iter++) {
-                float sum = 0.0f;
+                fp_t sum = FP_FROM_FLOAT(0.0f);
                 for (d = 0; d < dimension_count; d++) {
                     sum += candidates[i * dimension_count + d];
                 }
-                float error = sum - upper_bound;
+                fp_t error = sum - upper_bound;
                 for (d = 0; d < dimension_count; d++) {
                     candidates[i * dimension_count + d] -=
-                        error / (float)dimension_count;
+                        FP_DIV(error, (fp_t)dimension_count);
                     if (candidates[i * dimension_count + d] < lower_bound) {
                         candidates[i * dimension_count + d] = lower_bound;
                     }
@@ -200,18 +197,18 @@ ga_optimiser *ga_init(ga_settings *settings) {
     return opt;
 }
 
-int ga_ask(ga_optimiser *opt, float *out_candidate) {
+int ga_ask(ga_optimiser *opt, fp_t *out_candidate) {
     const int population_count = opt->population_count;
     const int dimension_count = opt->dimension_count;
-    const float lower_bound = opt->lower_bound;
-    const float upper_bound = opt->upper_bound;
+    const fp_t lower_bound = opt->lower_bound;
+    const fp_t upper_bound = opt->upper_bound;
 
     /* In the initialization phase, return initial random candidates one by one
      */
     if (opt->total_steps < population_count) {
         memcpy(out_candidate,
                &opt->candidates[opt->total_steps * dimension_count],
-               sizeof(float) * dimension_count);
+               sizeof(fp_t) * dimension_count);
         return opt->total_steps;
     }
 
@@ -234,13 +231,13 @@ int ga_ask(ga_optimiser *opt, float *out_candidate) {
         }
     }
 
-    const float *p1 = &opt->candidates[p1_id * dimension_count];
-    const float *p2 = &opt->candidates[p2_id * dimension_count];
+    const fp_t *p1 = &opt->candidates[p1_id * dimension_count];
+    const fp_t *p2 = &opt->candidates[p2_id * dimension_count];
 
     /* Uniform Crossover */
     int d;
     for (d = 0; d < dimension_count; d++) {
-        if (ga__next_float(opt->rng) < 0.50f) {
+        if (ga__next_fp(opt->rng) < FP_FROM_FLOAT(0.50f)) {
             out_candidate[d] = p1[d];
         } else {
             out_candidate[d] = p2[d];
@@ -248,24 +245,24 @@ int ga_ask(ga_optimiser *opt, float *out_candidate) {
     }
 
     /* Mutation */
-    if (ga__next_float(opt->rng) < 0.20f) {
-        float range = upper_bound - lower_bound;
+    if (ga__next_fp(opt->rng) < FP_FROM_FLOAT(0.20f)) {
+        fp_t range = upper_bound - lower_bound;
         /* Linearly decay mutation step size */
-        float progress = (float)opt->total_steps / 1000000.0f;
-        float max_step, min_step, step_size;
-        if (progress > 1.0f)
-            progress = 1.0f;
-        max_step = 0.10f * range;
-        min_step = 1.0f;
-        if (min_step > 0.01f * range)
-            min_step = 0.01f * range;
-        step_size = min_step + (max_step - min_step) * (1.0f - progress);
+        fp_t progress = FP_DIV((fp_t)opt->total_steps, FP_FROM_FLOAT(1000000.0f));
+        fp_t max_step, min_step, step_size;
+        if (progress > FP_FROM_FLOAT(1.0f))
+            progress = FP_FROM_FLOAT(1.0f);
+        max_step = FP_MUL(FP_FROM_FLOAT(0.10f), range);
+        min_step = FP_FROM_FLOAT(1.0f);
+        if (min_step > FP_MUL(FP_FROM_FLOAT(0.01f), range))
+            min_step = FP_MUL(FP_FROM_FLOAT(0.01f), range);
+        step_size = min_step + FP_MUL((max_step - min_step), (FP_FROM_FLOAT(1.0f) - progress));
 
-        if (dimension_count > 1 && ga__next_float(opt->rng) < 0.70f) {
+        if (dimension_count > 1 && ga__next_fp(opt->rng) < FP_FROM_FLOAT(0.70f)) {
             /* Sum-preserving mutation by transferring between two genes */
             int d1 = ga__next(opt->rng) % dimension_count;
             int d2;
-            float val1, val2, v_min, v_max, v;
+            fp_t val1, val2, v_min, v_max, v;
             do {
                 d2 = ga__next(opt->rng) % dimension_count;
             } while (d2 == d1);
@@ -280,7 +277,7 @@ int ga_ask(ga_optimiser *opt, float *out_candidate) {
                         ? (upper_bound - val1)
                         : (val2 - lower_bound);
 
-            v = (ga__next_float(opt->rng) * 2.0f - 1.0f) * step_size;
+            v = FP_MUL((FP_MUL(ga__next_fp(opt->rng), FP_FROM_FLOAT(2.0f)) - FP_FROM_FLOAT(1.0f)), step_size);
             if (v < v_min)
                 v = v_min;
             if (v > v_max)
@@ -291,8 +288,8 @@ int ga_ask(ga_optimiser *opt, float *out_candidate) {
         } else {
             /* Coordinate-wise mutation */
             int d_mut = ga__next(opt->rng) % dimension_count;
-            float v = (ga__next_float(opt->rng) * 2.0f - 1.0f) * step_size;
-            float val = out_candidate[d_mut] + v;
+            fp_t v = FP_MUL((FP_MUL(ga__next_fp(opt->rng), FP_FROM_FLOAT(2.0f)) - FP_FROM_FLOAT(1.0f)), step_size);
+            fp_t val = out_candidate[d_mut] + v;
             if (val < lower_bound)
                 val = lower_bound;
             if (val > upper_bound)
@@ -305,13 +302,13 @@ int ga_ask(ga_optimiser *opt, float *out_candidate) {
     if (dimension_count > 1) {
         int iter;
         for (iter = 0; iter < 3; iter++) {
-            float sum = 0.0f;
+            fp_t sum = FP_FROM_FLOAT(0.0f);
             for (d = 0; d < dimension_count; d++) {
                 sum += out_candidate[d];
             }
-            float error = sum - upper_bound;
+            fp_t error = sum - upper_bound;
             for (d = 0; d < dimension_count; d++) {
-                out_candidate[d] -= error / (float)dimension_count;
+                out_candidate[d] -= FP_DIV(error, (fp_t)dimension_count);
                 if (out_candidate[d] < lower_bound) {
                     out_candidate[d] = lower_bound;
                 }
@@ -324,7 +321,7 @@ int ga_ask(ga_optimiser *opt, float *out_candidate) {
 
     /* Return the worst individual in the population to be replaced */
     int worst_id = 0;
-    float max_fitness = -1.0f;
+    fp_t max_fitness = -FP_FROM_FLOAT(1.0f);
     for (i = 0; i < population_count; i++) {
         if (opt->fitnesses[i] > max_fitness) {
             max_fitness = opt->fitnesses[i];
@@ -335,13 +332,13 @@ int ga_ask(ga_optimiser *opt, float *out_candidate) {
     return worst_id;
 }
 
-void ga_tell(ga_optimiser *opt, int id, const float *candidate, float fitness) {
+void ga_tell(ga_optimiser *opt, int id, const fp_t *candidate, fp_t fitness) {
     const int dimension_count = opt->dimension_count;
 
     /* Replace if better, or if initial loading */
-    if (opt->fitnesses[id] == INFINITY || fitness < opt->fitnesses[id]) {
+    if (opt->fitnesses[id] == FP_MAX || fitness < opt->fitnesses[id]) {
         memcpy(&opt->candidates[id * dimension_count], candidate,
-               sizeof(float) * dimension_count);
+               sizeof(fp_t) * dimension_count);
         opt->fitnesses[id] = fitness;
         opt->best = (fitness < opt->fitnesses[opt->best]) ? id : opt->best;
     }
@@ -349,9 +346,9 @@ void ga_tell(ga_optimiser *opt, int id, const float *candidate, float fitness) {
     opt->total_steps++;
 }
 
-float ga_best(ga_optimiser *opt, float *out_candidate) {
+fp_t ga_best(ga_optimiser *opt, fp_t *out_candidate) {
     const int dimension_count = opt->dimension_count;
-    const int candidate_bytes = sizeof(float) * dimension_count;
+    const int candidate_bytes = sizeof(fp_t) * dimension_count;
 
     if (out_candidate) {
         memcpy(out_candidate, &opt->candidates[opt->best * dimension_count],

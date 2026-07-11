@@ -1,10 +1,10 @@
 // Copyright 2021 Charlie Shenton
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version FP_FROM_FLOAT(2.0) (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-FP_FROM_FLOAT(2.0)
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,8 +29,8 @@ typedef struct de_settings
 {
     int dimension_count;  // Number of dimensions in the optimisation problem
     int population_count; // Number of agents in the population
-    float lower_bound;    // Lower bound of the search space (same in all dimensions)
-    float upper_bound;    // Upper bound of the search space (same in all dimensions)
+    fp_t lower_bound;    // Lower bound of the search space (same in all dimensions)
+    fp_t upper_bound;    // Upper bound of the search space (same in all dimensions)
     int random_seed;      // Seed for the optimiser's pseudo random number generator
 } de_settings;
 
@@ -38,37 +38,37 @@ typedef struct de_optimiser
 {
     int dimension_count;  // Number of dimensions in the optimisation problem
     int population_count; // Number of agents in the population
-    float lower_bound;    // Lower bound of the search space (same in all dimensions)
-    float upper_bound;    // Upper bound of the search space (same in all dimensions)
+    fp_t lower_bound;    // Lower bound of the search space (same in all dimensions)
+    fp_t upper_bound;    // Upper bound of the search space (same in all dimensions)
     int best;             // Index of the agent with the lowest fitness
 
-    float *crossover_probs;      // Per-agent crossover probability params (population_count)
-    float *differential_weights; // Per-agent weighting params (population_count)
-    float *fitnesses;            // Per-agent fitness
-    float *candidates;           // Per-agent candidate vectors (population_count * dimension_count)
+    fp_t *crossover_probs;      // Per-agent crossover probability params (population_count)
+    fp_t *differential_weights; // Per-agent weighting params (population_count)
+    fp_t *fitnesses;            // Per-agent fitness
+    fp_t *candidates;           // Per-agent candidate vectors (population_count * dimension_count)
     uint32_t rng[4];             // PRNG state
 } de_optimiser;
 
 #define DE_MEMORY_REQUIRED(dimensions, population) ( \
     sizeof(de_optimiser) +                           \
-    (sizeof(float) * (population)) +                 \
-    (sizeof(float) * (population)) +                 \
-    (sizeof(float) * (population)) +                 \
-    (sizeof(float) * (dimensions) * (population))    \
+    (sizeof(fp_t) * (population)) +                 \
+    (sizeof(fp_t) * (population)) +                 \
+    (sizeof(fp_t) * (population)) +                 \
+    (sizeof(fp_t) * (dimensions) * (population))    \
 )
 
 // Initialise the optimiser. Returns NULL if any allocation failed.
 de_optimiser *de_init(de_settings *settings);
 
 // Ask the optimiser to generate a candidate solution for evaluation
-int de_ask(de_optimiser *opt, float *out_candidate);
+int de_ask(de_optimiser *opt, fp_t *out_candidate);
 
 // Tell the optimiser the fitness of a candidate solution
-void de_tell(de_optimiser *opt, int id, const float *candidate, float fitness);
+void de_tell(de_optimiser *opt, int id, const fp_t *candidate, fp_t fitness);
 
 // Query the optimiser for the current best fitness and corresponding candidate solution. You
 // may optionall pass in NULL to out_candidate if you just want the minimum fitness.
-float de_best(de_optimiser *opt, float *out_candidate);
+fp_t de_best(de_optimiser *opt, fp_t *out_candidate);
 
 // Free the optimiser and its memory pools
 void de_deinit(de_optimiser *opt);
@@ -79,7 +79,7 @@ void de_deinit(de_optimiser *opt);
 
 #ifdef DIFFERENTIAL_EVOLUTION_IMPL
 
-#include <math.h>
+#include "fpmath.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -106,28 +106,28 @@ static uint32_t de__next(uint32_t s[4])
     return result;
 }
 
-static float de__next_float(uint32_t s[4])
+static fp_t de__next_fp(uint32_t s[4])
 {
     // Only the upper 28 bits are high entropy enough
     const uint32_t max_draw = (~(uint32_t)0) >> 4;
-    const float divisor = 1.0f / (float)max_draw;
-    return (float)(de__next(s) >> 4) * divisor;
+    const fp_t divisor = FP_DIV(FP_FROM_FLOAT(1.0f), (fp_t)max_draw);
+    return FP_MUL((fp_t)(de__next(s) >> 4), divisor);
 }
 
 de_optimiser *de_init(de_settings *settings)
 {
     const int dimension_count = settings->dimension_count;
     const int population_count = settings->population_count;
-    const float lower_bound = settings->lower_bound;
-    const float upper_bound = settings->upper_bound;
+    const fp_t lower_bound = settings->lower_bound;
+    const fp_t upper_bound = settings->upper_bound;
     const int random_seed = settings->random_seed;
 
     // Allocate the optimiser and its memory pools
     de_optimiser *opt = (de_optimiser *)DE_ALLOC(sizeof(de_optimiser));
-    float *crossover_probs = (float *)DE_ALLOC(sizeof(float) * population_count);
-    float *differential_weights = (float *)DE_ALLOC(sizeof(float) * population_count);
-    float *fitnesses = (float *)DE_ALLOC(sizeof(float) * population_count);
-    float *candidates = (float *)DE_ALLOC(sizeof(float) * dimension_count * population_count);
+    fp_t *crossover_probs = (fp_t *)DE_ALLOC(sizeof(fp_t) * population_count);
+    fp_t *differential_weights = (fp_t *)DE_ALLOC(sizeof(fp_t) * population_count);
+    fp_t *fitnesses = (fp_t *)DE_ALLOC(sizeof(fp_t) * population_count);
+    fp_t *candidates = (fp_t *)DE_ALLOC(sizeof(fp_t) * dimension_count * population_count);
 
     if (!opt || !crossover_probs || !differential_weights || !fitnesses || !candidates)
     {
@@ -153,25 +153,25 @@ de_optimiser *de_init(de_settings *settings)
     // Initialise crossover to random values in [0, 1]
     for (int i = 0; i < population_count; i++)
     {
-        crossover_probs[i] = de__next_float(rng);
+        crossover_probs[i] = de__next_fp(rng);
     }
 
     // Initialise differential weights to random values in [0, 2]
     for (int i = 0; i < population_count; i++)
     {
-        differential_weights[i] = 2.0f * de__next_float(rng);
+        differential_weights[i] = FP_MUL(FP_FROM_FLOAT(2.0f), de__next_fp(rng));
     }
 
     // Initialise fitnesses to infinity
     for (int i = 0; i < population_count; i++)
     {
-        fitnesses[i] = INFINITY;
+        fitnesses[i] = FP_MAX;
     }
 
     // Initialise the candidates to random points in the search space
     for (int i = 0; i < dimension_count * population_count; i++)
     {
-        candidates[i] = lower_bound + de__next_float(rng) * (upper_bound - lower_bound);
+        candidates[i] = lower_bound + FP_MUL(de__next_fp(rng), (upper_bound - lower_bound));
     }
 
     // Fill out the optimiser struct and return the pointer to it
@@ -192,7 +192,7 @@ de_optimiser *de_init(de_settings *settings)
     return opt;
 }
 
-int de_ask(de_optimiser *opt, float *out_candidate)
+int de_ask(de_optimiser *opt, fp_t *out_candidate)
 {
     const int neighbour_radius = 8;
     const int population_count = opt->population_count;
@@ -206,27 +206,27 @@ int de_ask(de_optimiser *opt, float *out_candidate)
     do { c_id = (x_id + de__next(opt->rng) % neighbour_radius) % population_count; } while (c_id == x_id || c_id == a_id || c_id == b_id);
 
     // Get the crossover params for x
-    float crossover_prob = opt->crossover_probs[x_id];
-    float differential_weight = opt->differential_weights[x_id];
+    fp_t crossover_prob = opt->crossover_probs[x_id];
+    fp_t differential_weight = opt->differential_weights[x_id];
 
     // Get our candidate pointers
-    float *x = &opt->candidates[x_id * dimension_count];
-    float *a = &opt->candidates[a_id * dimension_count];
-    float *b = &opt->candidates[b_id * dimension_count];
-    float *c = &opt->candidates[c_id * dimension_count];
+    fp_t *x = &opt->candidates[x_id * dimension_count];
+    fp_t *a = &opt->candidates[a_id * dimension_count];
+    fp_t *b = &opt->candidates[b_id * dimension_count];
+    fp_t *c = &opt->candidates[c_id * dimension_count];
 
     // Choose a random dimension to change with certainty
     int mut_dim = de__next(opt->rng) % dimension_count;
 
-    const float lower_bound = opt->lower_bound;
-    const float upper_bound = opt->upper_bound;
+    const fp_t lower_bound = opt->lower_bound;
+    const fp_t upper_bound = opt->upper_bound;
 
     // Apply the crossover to the output array
     for (int i = 0; i < dimension_count; i++)
     {
-        if (de__next_float(opt->rng) < crossover_prob || i == mut_dim)
+        if (de__next_fp(opt->rng) < crossover_prob || i == mut_dim)
         {
-            float val = a[i] + differential_weight * (b[i] - c[i]);
+            fp_t val = a[i] + FP_MUL(differential_weight, (b[i] - c[i]));
             if (val < lower_bound) val = lower_bound;
             if (val > upper_bound) val = upper_bound;
             out_candidate[i] = val;
@@ -240,29 +240,29 @@ int de_ask(de_optimiser *opt, float *out_candidate)
     return x_id;
 }
 
-void de_tell(de_optimiser *opt, int id, const float *candidate, float fitness)
+void de_tell(de_optimiser *opt, int id, const fp_t *candidate, fp_t fitness)
 {
     const int dimension_count = opt->dimension_count;
 
     if (fitness < opt->fitnesses[id])
     {
         // Replace this individual with the candidate
-        memcpy(&opt->candidates[id * dimension_count], candidate, sizeof(float) * dimension_count);
+        memcpy(&opt->candidates[id * dimension_count], candidate, sizeof(fp_t) * dimension_count);
         opt->fitnesses[id] = fitness;
         opt->best = (fitness < opt->fitnesses[opt->best]) ? id : opt->best;
     }
     else
     {
         // Reroll the crossover parameters for this individual
-        opt->crossover_probs[id] = de__next_float(opt->rng);
-        opt->differential_weights[id] = 2.0f * de__next_float(opt->rng);
+        opt->crossover_probs[id] = de__next_fp(opt->rng);
+        opt->differential_weights[id] = FP_MUL(FP_FROM_FLOAT(2.0f), de__next_fp(opt->rng));
     }
 }
 
-float de_best(de_optimiser *opt, float *out_candidate)
+fp_t de_best(de_optimiser *opt, fp_t *out_candidate)
 {
     const int dimension_count = opt->dimension_count;
-    const int candidate_bytes = sizeof(float) * dimension_count;
+    const int candidate_bytes = sizeof(fp_t) * dimension_count;
 
     if (out_candidate)
     {
