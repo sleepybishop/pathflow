@@ -11,9 +11,9 @@
 #include <stdint.h>
 
 /* Static memory arena for solvers to avoid dynamic allocation */
+/* Static memory arena for solvers to avoid dynamic allocation */
 #ifndef PATHFLOW_ARENA_SIZE
-#define PATHFLOW_ARENA_SIZE                                                    \
-    262144 /* 256 KB should be plenty for N=16 pop=320 */
+#define PATHFLOW_ARENA_SIZE (16 * (MAX_PACKETS + 1) * 8 + 65536)
 #endif
 
 static uint8_t pathflow_arena[PATHFLOW_ARENA_SIZE];

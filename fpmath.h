@@ -5,7 +5,28 @@
 
 typedef int64_t fp_t;
 
+#ifndef MAX_PACKETS
+#define MAX_PACKETS 1000
+#endif
+
+/*
+ * Calculate max safe fraction bits to avoid 64-bit overflow during FP_MUL.
+ * Max internal value is roughly (MAX_PACKETS * 10000.0) during penalty
+ * calculations. To safely multiply them: (value * FP_ONE) * (value * FP_ONE) <
+ * INT64_MAX
+ */
+#if MAX_PACKETS <= 1000
+#define FP_FRAC_BITS 19
+#elif MAX_PACKETS <= 10000
+#define FP_FRAC_BITS 17
+#elif MAX_PACKETS <= 100000
 #define FP_FRAC_BITS 16
+#elif MAX_PACKETS <= 1000000
+#define FP_FRAC_BITS 14
+#else
+#define FP_FRAC_BITS 10
+#endif
+
 #define FP_ONE ((fp_t)(1 << FP_FRAC_BITS))
 #define FP_MAX INT64_MAX
 

@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
         exit(-1);
     }
     N = (N > MAX_LINKS) ? MAX_LINKS : N;
-    K = (K < 1) ? 1 : ((K > 1000) ? 1000 : K);
+    K = (K < 1) ? 1 : ((K > MAX_PACKETS) ? MAX_PACKETS : K);
     Ps_f = CLAMP(Ps_f, 0.01f, 0.99f);
     size_t Ps = (size_t)roundf(Ps_f * 100.0f);
     printf("N: %zu, K: %zu, Ps: %.2f\n", N, K, Ps_f);
