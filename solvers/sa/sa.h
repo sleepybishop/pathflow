@@ -290,7 +290,10 @@ void sa_tell(sa_optimiser *opt, int id, const fp_t *candidate, fp_t fitness) {
         accept = 1;
     } else {
         fp_t diff = fitness - opt->fitnesses[id];
-        fp_t p = fp_exp(FP_DIV(-diff, opt->temperatures[id]));
+        fp_t p = 0;
+        if (opt->temperatures[id] > 0) {
+            p = fp_exp(FP_DIV(-diff, opt->temperatures[id]));
+        }
         if (sa__next_fp(opt->rng) < p) {
             accept = 1;
         }

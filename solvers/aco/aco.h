@@ -125,7 +125,7 @@ aco_optimiser *aco_init(aco_settings *settings) {
     const fp_t lower_bound = settings->lower_bound;
     const fp_t upper_bound = settings->upper_bound;
     const int random_seed = settings->random_seed;
-    const int K = (int)upper_bound;
+    const int K = (int)FP_TO_INT(upper_bound);
     const fp_t tau_max = FP_FROM_FLOAT(10.0f);
     fp_t range;
     uint32_t rng[4];
@@ -237,7 +237,7 @@ int aco_ask(aco_optimiser *opt, fp_t *out_candidate) {
     }
 
     /* Ant constructs a solution step-by-step */
-    int K = (int)upper_bound;
+    int K = (int)FP_TO_INT(upper_bound);
     int m[16] = {0};
     fp_t probs[16];
     int k;
@@ -270,7 +270,7 @@ int aco_ask(aco_optimiser *opt, fp_t *out_candidate) {
     /* Write to out_candidate */
     int d;
     for (d = 0; d < dimension_count; d++) {
-        out_candidate[d] = (fp_t)m[d];
+        out_candidate[d] = FP_FROM_INT(m[d]);
     }
 
     return opt->evaluated_count % population_count;
@@ -280,7 +280,7 @@ void aco_tell(aco_optimiser *opt, int id, const fp_t *candidate,
               fp_t fitness) {
     const int dimension_count = opt->dimension_count;
     const int population_count = opt->population_count;
-    const int K = (int)opt->upper_bound;
+    const int K = (int)FP_TO_INT(opt->upper_bound);
 
     /* Store the ant's solution and fitness */
     memcpy(&opt->candidates[id * dimension_count], candidate,
@@ -328,7 +328,7 @@ void aco_tell(aco_optimiser *opt, int id, const fp_t *candidate,
         }
 
         for (d = 0; d < dimension_count; d++) {
-            int allocated = (int)best_candidate[d];
+            int allocated = (int)FP_TO_INT(best_candidate[d]);
             for (j = 0; j < allocated; j++) {
                 if (j <= K) {
                     opt->pheromones[j * dimension_count + d] += delta_tau;

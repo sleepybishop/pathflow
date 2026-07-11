@@ -248,7 +248,7 @@ int ga_ask(ga_optimiser *opt, fp_t *out_candidate) {
     if (ga__next_fp(opt->rng) < FP_FROM_FLOAT(0.20f)) {
         fp_t range = upper_bound - lower_bound;
         /* Linearly decay mutation step size */
-        fp_t progress = FP_DIV((fp_t)opt->total_steps, FP_FROM_FLOAT(1000000.0f));
+        fp_t progress = FP_DIV(FP_FROM_INT(opt->total_steps), FP_FROM_FLOAT(1000000.0f));
         fp_t max_step, min_step, step_size;
         if (progress > FP_FROM_FLOAT(1.0f))
             progress = FP_FROM_FLOAT(1.0f);

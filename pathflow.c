@@ -13,7 +13,7 @@
 /* Static memory arena for solvers to avoid dynamic allocation */
 /* Static memory arena for solvers to avoid dynamic allocation */
 #ifndef PATHFLOW_ARENA_SIZE
-#define PATHFLOW_ARENA_SIZE (16 * (MAX_PACKETS + 1) * 8 + 65536)
+#define PATHFLOW_ARENA_SIZE (16 * (MAX_PACKETS + 1) * 8 + 1048576)
 #endif
 
 static uint8_t pathflow_arena[PATHFLOW_ARENA_SIZE];
