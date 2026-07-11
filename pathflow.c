@@ -10,6 +10,14 @@
 #include "pathflow.h"
 #include "solvers.h"
 
+static inline size_t calculate_n(float c1, float c2, float m) {
+    float val = c1 * sqrtf(m) + c2 * m;
+    return (val < 0.0f) ? 0 : (size_t)ceilf(val);
+}
+
+static inline float calculate_time(float b, float l, size_t q, float x) {
+    return x / b + l + (float)q / b;
+}
 /* return zscore given probability of success */
 static float qnorm(size_t P) {
     if (P == 50)
@@ -28,28 +36,17 @@ static float qnorm(size_t P) {
     return (P > 50) ? z_c[P - 51] : -z_c[49 - P];
 }
 
-/* estimate packets needed across lossy link given success probability */
-static size_t psi(size_t Ps, size_t m, float p) {
-    p = CLAMP(p, 0.0f, 0.999f);
-    float mp = (float)m * p;
-    float val = (qnorm(Ps) * sqrt(mp) + mp) / (1.0f - p);
-    size_t n = (val < 0.0f) ? 0 : (size_t)ceil(val);
-    return m + n;
-}
-
-static float path_time(size_t m, const path_t *path, size_t Ps) {
-    if (path->b <= 0.0f)
-        return FLT_MAX;
-    return psi(Ps, m, path->p) / path->b + path->l + path->q / path->b;
-}
-
-static float greedy_solver(size_t N, size_t K, path_t *path, size_t Ps) {
+static float greedy_solver(size_t N, size_t K, path_t *path, const float *c1,
+                           const float *c2) {
     N = (N > MAX_LINKS) ? MAX_LINKS : N;
     float next_times[MAX_LINKS];
 
     for (size_t i = 0; i < N; i++) {
+
         path[i].m = 0;
-        next_times[i] = path_time(1, &path[i], Ps);
+        size_t n = calculate_n(c1[i], c2[i], 1.0f);
+        next_times[i] =
+            calculate_time(path[i].b, path[i].l, path[i].q, 1.0f + (float)n);
     }
 
     for (size_t k = 0; k < K; k++) {
@@ -62,33 +59,52 @@ static float greedy_solver(size_t N, size_t K, path_t *path, size_t Ps) {
             }
         }
         path[best_idx].m++;
+        size_t next_m = path[best_idx].m + 1;
+        size_t n = calculate_n(c1[best_idx], c2[best_idx], (float)next_m);
         next_times[best_idx] =
-            path_time(path[best_idx].m + 1, &path[best_idx], Ps);
+            calculate_time(path[best_idx].b, path[best_idx].l, path[best_idx].q,
+                           (float)next_m + (float)n);
     }
 
     float slowest = 0.0f;
     for (size_t i = 0; i < N; i++) {
-        path[i].x = psi(Ps, path[i].m, path[i].p);
-        path[i].t = (path[i].m > 0) ? path_time(path[i].m, &path[i], Ps) : 0.0f;
-        if (path[i].m > 0 && path[i].t > slowest) {
-            slowest = path[i].t;
+        if (path[i].m > 0) {
+            size_t n = calculate_n(c1[i], c2[i], (float)path[i].m);
+            path[i].x = path[i].m + n;
+            path[i].t = calculate_time(path[i].b, path[i].l, path[i].q,
+                                       (float)path[i].x);
+            if (path[i].t > slowest) {
+                slowest = path[i].t;
+            }
+        } else {
+            path[i].x = 0;
+            path[i].t = 0.0f;
         }
     }
     return slowest;
 }
 
 static float transfer_time(size_t N, size_t K, float penalty_weight,
-                           const float *m, const path_t *path, size_t Ps) {
-    float num = 0.0, slowest = 0.0;
+                           const float *m, const path_t *path, const float *c1,
+                           const float *c2) {
+    float num = 0.0f, slowest = 0.0f;
     for (size_t i = 0; i < N; i++) {
         float clamped_m = CLAMP(m[i], 0.0f, (float)K);
         float rounded_m = roundf(clamped_m);
         num += rounded_m;
         if (rounded_m > 0.0f) {
-            slowest = fmax(slowest, path_time((size_t)rounded_m, &path[i], Ps));
+            if (path[i].b <= 0.0f) {
+                return FLT_MAX;
+            }
+            size_t n = calculate_n(c1[i], c2[i], rounded_m);
+            float time = calculate_time(path[i].b, path[i].l, path[i].q,
+                                        rounded_m + (float)n);
+            if (time > slowest) {
+                slowest = time;
+            }
         }
     }
-    return fabs(K - num) * penalty_weight + slowest;
+    return fabsf((float)K - num) * penalty_weight + slowest;
 }
 
 void pathflow_update_state(path_state_t *state, float b, float l, float p,
@@ -112,6 +128,17 @@ void pathflow_update_state(path_state_t *state, float b, float l, float p,
 float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight,
                         size_t Ps) {
     N = (N > MAX_LINKS) ? MAX_LINKS : N;
+
+    float c1[MAX_LINKS];
+    float c2[MAX_LINKS];
+    float q = qnorm(Ps);
+
+    for (size_t i = 0; i < N; i++) {
+        float p = CLAMP(path[i].p, 0.0f, 0.999f);
+        float one_minus_p = 1.0f - p;
+        c1[i] = (q * sqrtf(p)) / one_minus_p;
+        c2[i] = p / one_minus_p;
+    }
 
     /* Select solver plugin based on environment variable PATHFLOW_SOLVER */
     const solver_interface_t *plugin = &de_plugin;
@@ -143,7 +170,7 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight,
         return -1;
     }
 
-    float greedy_fitness = greedy_solver(N, K, path, Ps);
+    float greedy_fitness = greedy_solver(N, K, path, c1, c2);
     for (size_t i = 0; i < N; i++) {
         candidate[i] = (float)path[i].m;
     }
@@ -155,7 +182,7 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight,
     for (size_t i = 0; i < iters; i++) {
         int id = plugin->ask(solver, candidate);
         float fitness =
-            transfer_time(N, K, penalty_weight, candidate, path, Ps);
+            transfer_time(N, K, penalty_weight, candidate, path, c1, c2);
         plugin->tell(solver, id, candidate, fitness);
 
         float current_best = plugin->best(solver, NULL);
@@ -172,8 +199,15 @@ float pathflow_optimize(size_t N, size_t K, path_t *path, float penalty_weight,
     for (size_t i = 0; i < N; i++) {
         float clamped_candidate = CLAMP(candidate[i], 0.0f, (float)K);
         path[i].m = (size_t)round(clamped_candidate);
-        path[i].x = psi(Ps, path[i].m, path[i].p);
-        path[i].t = (path[i].m > 0) ? path_time(path[i].m, &path[i], Ps) : 0.0f;
+        if (path[i].m > 0) {
+            size_t n = calculate_n(c1[i], c2[i], (float)path[i].m);
+            path[i].x = path[i].m + n;
+            path[i].t = calculate_time(path[i].b, path[i].l, path[i].q,
+                                       (float)path[i].x);
+        } else {
+            path[i].x = 0;
+            path[i].t = 0.0f;
+        }
     }
     plugin->deinit(solver);
 
