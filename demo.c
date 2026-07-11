@@ -14,6 +14,13 @@ float randf() { return ((float)rand() / RAND_MAX) * 2.0f - 1.0f; }
 
 #include <locale.h>
 
+typedef struct {
+    float b;
+    float l;
+    float p;
+    size_t q;
+} sim_path_t;
+
 int main(int argc, char **argv) {
     float max_p = 0.20f;
     float max_l = 2.0f;
@@ -23,7 +30,7 @@ int main(int argc, char **argv) {
     }
 
     setlocale(LC_ALL, "");
-    path_t base_path[MAX_LINKS] = {0};
+    sim_path_t base_path[MAX_LINKS] = {0};
     path_state_t states[MAX_LINKS] = {0};
     size_t N = 0, K = 0;
     float Ps_f = 0.0, deadline = 60.0;
@@ -86,8 +93,8 @@ int main(int argc, char **argv) {
             break;
 
         path_t path[MAX_LINKS] = {0};
-        static path_t current_path[MAX_LINKS] = {0};
-        static path_t target_path[MAX_LINKS] = {0};
+        static sim_path_t current_path[MAX_LINKS] = {0};
+        static sim_path_t target_path[MAX_LINKS] = {0};
         static int initialized = 0;
         if (!initialized) {
             for (size_t j = 0; j < N; j++) {
@@ -131,9 +138,10 @@ int main(int argc, char **argv) {
             current_path[j].l = CLAMP(current_path[j].l, 0.001f, 5.0f);
             current_path[j].p = CLAMP(current_path[j].p, 0.0f, 0.99f);
 
-            pathflow_update_state(&states[j], current_path[j].b,
-                                  current_path[j].l, current_path[j].p,
-                                  base_path[j].q, alpha);
+            pathflow_update_state(&states[j], FP_FROM_FLOAT(current_path[j].b),
+                                  FP_FROM_FLOAT(current_path[j].l),
+                                  FP_FROM_FLOAT(current_path[j].p),
+                                  base_path[j].q, FP_FROM_FLOAT(alpha));
 
             path[j].b = states[j].b_ewma;
             path[j].l = states[j].l_ewma;
@@ -147,7 +155,8 @@ int main(int argc, char **argv) {
         int dropped[MAX_LINKS] = {0};
 
         for (size_t j = 0; j < N; j++) {
-            if (path[j].p >= max_p || path[j].l >= max_l) {
+            if (FP_TO_FLOAT(path[j].p) >= max_p ||
+                FP_TO_FLOAT(path[j].l) >= max_l) {
                 dropped[j] = 1;
             } else {
                 active_paths[active_N] = path[j];
@@ -156,10 +165,29 @@ int main(int argc, char **argv) {
             }
         }
 
+        pathflow_solver_t solver_type = PATHFLOW_SOLVER_DE;
+        const char *env_solver = getenv("PATHFLOW_SOLVER");
+        if (env_solver != NULL) {
+            if (strcmp(env_solver, "greedy") == 0) {
+                solver_type = PATHFLOW_SOLVER_GREEDY;
+            } else if (strcmp(env_solver, "sa") == 0) {
+                solver_type = PATHFLOW_SOLVER_SA;
+            } else if (strcmp(env_solver, "pso") == 0) {
+                solver_type = PATHFLOW_SOLVER_PSO;
+            } else if (strcmp(env_solver, "ga") == 0) {
+                solver_type = PATHFLOW_SOLVER_GA;
+            } else if (strcmp(env_solver, "aco") == 0) {
+                solver_type = PATHFLOW_SOLVER_ACO;
+            } else if (strcmp(env_solver, "ts") == 0) {
+                solver_type = PATHFLOW_SOLVER_TS;
+            }
+        }
+
         float total_time = 0.0f;
         if (active_N > 0) {
-            total_time =
-                pathflow_optimize(active_N, K, active_paths, 10000.0f, Ps);
+            total_time = FP_TO_FLOAT(
+                pathflow_optimize(active_N, K, active_paths,
+                                  FP_FROM_FLOAT(10000.0f), Ps, solver_type));
             for (size_t j = 0; j < active_N; j++) {
                 size_t orig = map[j];
                 path[orig] = active_paths[j];
@@ -196,9 +224,9 @@ int main(int argc, char **argv) {
         for (size_t j = 0; j < N; j++) {
             int row = 6 + j;
             mvprintw(row, 0, "[%2zu]", j);
-            mvprintw(row, 5, "%6.0f", path[j].b);
-            mvprintw(row, 12, "%6.3f", path[j].l);
-            mvprintw(row, 19, "%5.1f%%", path[j].p * 100.0f);
+            mvprintw(row, 5, "%6.0f", FP_TO_FLOAT(path[j].b));
+            mvprintw(row, 12, "%6.3f", FP_TO_FLOAT(path[j].l));
+            mvprintw(row, 19, "%5.1f%%", FP_TO_FLOAT(path[j].p) * 100.0f);
 
             if (dropped[j]) {
                 attron(COLOR_PAIR(3));
@@ -219,7 +247,8 @@ int main(int argc, char **argv) {
                     blocks = 1;
 
                 int color = 1;
-                if (path[j].p > 0.05f || path[j].l > 0.5f)
+                if (FP_TO_FLOAT(path[j].p) > 0.05f ||
+                    FP_TO_FLOAT(path[j].l) > 0.5f)
                     color = 2;
 
                 attron(COLOR_PAIR(color));
